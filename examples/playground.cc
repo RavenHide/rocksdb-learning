@@ -53,4 +53,6 @@ int main() {
 
   s = db->Get(ReadOptions(), key, &value);
   std::printf("key: %s, val: %s\n", key.c_str(), value.c_str());
+
+  delete db;
 }
