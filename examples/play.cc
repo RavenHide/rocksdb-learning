@@ -43,7 +43,7 @@ void test_key() {
   for (uint64_t i = 0; i < 300; ++i) {
     std::string str = Key(i);
 
-    fprintf(stdout, "address: %p, i: %" PRIu64 ", gen_str: %s \n", &str, i, str.c_str());
+    fprintf(stdout, "address: %p, i: %llu, gen_str: %s \n", &str, i, str.c_str());
   }
 }
 
