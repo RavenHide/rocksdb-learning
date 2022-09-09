@@ -186,7 +186,7 @@ void RunPrimary() {
       }
     }
     cur_key_size += static_cast<uint64_t>(kNumKeysPerFlush);
-    printf("current key size: %llu, max_key_size: %llu\n", cur_key_size,
+    printf("current key size: %lu, max_key_size: %lu\n", cur_key_size,
            kMaxKeySize);
   }
 
@@ -222,7 +222,6 @@ void IteratorDB() {
       assert(false);
     } else {
       ReadOptions read_opt;
-
       std::unique_ptr<Iterator> iter(db->NewIterator(read_opt, handles[0]));
       size_t counter = 0;
       for (iter->SeekToFirst(); iter->Valid() && counter <= kNumKeyPerIteration; iter->Next()) {
@@ -299,14 +298,63 @@ void PrefixIteratorDB() {
   db = nullptr;
 }
 
+void IteratorDBWithForPrev(const std::string& pre) {
+  // open db
+  Options opt;
+  std::vector<ColumnFamilyDescriptor> column_families;
+  for (const auto& cf_name : GetColumnFamilyNames()) {
+    column_families.push_back(ColumnFamilyDescriptor(cf_name, opt));
+  }
+
+  DB* db;
+  std::vector<ColumnFamilyHandle*> handles;
+  Status s = DB::Open(opt, kDBPath, column_families, &handles, &db);
+  if (!s.ok()) {
+    fprintf(stderr, "Failed to open db\n");
+    assert(false);
+  } else if (handles.size() != GetColumnFamilyNames().size()) {
+    fprintf(stderr, "handles's size is invalid\n");
+    assert(false);
+  } else {
+    if (handles[0] == nullptr) {
+      fprintf(stderr, "handles[0]  is nullptr \n");
+      assert(false);
+    } else {
+      ReadOptions read_opt;
+      std::unique_ptr<Iterator> iter(db->NewIterator(read_opt, handles[0]));
+      size_t counter = 0;
+      for (iter->SeekForPrev(pre); iter->Valid() && counter <= kNumKeyPerIteration; iter->Next()) {
+        printf("column_family: %s, key: %s, val: %s\n",
+               handles[0]->GetName().c_str(),
+               iter->key().ToString().c_str(),
+               iter->value().ToString().c_str());
+        ++counter;
+      }
+      printf("iterator is done ============ \n");
+    }
+  }
+  for (auto h : handles) {
+    delete h;
+  }
+  handles.clear();
+  delete db;
+  db = nullptr;
+}
+
 // clang++ multiple_play.cc  ../librocksdb.a -o multiple_play.out -I ../include/
 // -std=c++17 -lpthread -lz  -lbz2 -lzstd -ldl
 int main() {
-  //  CreateDB();
-  //  RunPrimary();
+//  CreateDB();
+//  RunPrimary();
   // iterator data
+
   IteratorDB();
+  printf("iteration is done ========\n");
   PrefixIteratorDB();
+  printf("prefix iteration is done ========\n");
+  IteratorDBWithForPrev("400");
+  printf("iteration with prev is done ========\n");
+
   // test Key
   //  for (uint64_t i = 0; i < 10; ++i) {
   //    Key(i);
