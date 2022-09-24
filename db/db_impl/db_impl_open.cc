@@ -1580,6 +1580,7 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
 Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   DBOptions db_options(options);
   ColumnFamilyOptions cf_options(options);
+  // 默认使用 default column family
   std::vector<ColumnFamilyDescriptor> column_families;
   column_families.push_back(
       ColumnFamilyDescriptor(kDefaultColumnFamilyName, cf_options));
@@ -1740,6 +1741,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     return s;
   }
 
+  // 返回值安全性校验和处理
   *dbptr = nullptr;
   assert(handles);
   handles->clear();
@@ -1751,6 +1753,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   }
 
   DBImpl* impl = new DBImpl(db_options, dbname, seq_per_batch, batch_per_txn);
+  // 这里应该是要日志实例必须要存在，否者认为初始化失败
   if (!impl->immutable_db_options_.info_log) {
     s = impl->init_logger_creation_s_;
     delete impl;
@@ -1758,8 +1761,11 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   } else {
     assert(impl->init_logger_creation_s_.ok());
   }
+
+  // 1. 这段代码都是初始化 存储数据的文件路径
   s = impl->env_->CreateDirIfMissing(impl->immutable_db_options_.GetWalDir());
   if (s.ok()) {
+    // 初始化 wal 的路径成功后，再创建 db 和 column family 的路径
     std::vector<std::string> paths;
     for (auto& db_path : impl->immutable_db_options_.db_paths) {
       paths.emplace_back(db_path.path);
@@ -1790,6 +1796,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     return s;
   }
 
+  // 2. DB启动后，如果上次DB出现异常非正常退出，这里是需要进行recover，来进行数据恢复的
   impl->wal_in_db_path_ = impl->immutable_db_options_.IsWalDirSameAsDBPath();
   RecoveryContext recovery_ctx;
   impl->mutex_.Lock();
@@ -1799,6 +1806,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   s = impl->Recover(column_families, false, false, false, &recovered_seq,
                     &recovery_ctx);
   if (s.ok()) {
+    // 创建 wal 以及 一些wal相关参数的初始化
     uint64_t new_log_number = impl->versions_->NewFileNumber();
     log::Writer* new_log = nullptr;
     const size_t preallocate_block_size =
@@ -1812,7 +1820,6 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
       assert(impl->logs_.empty());
       impl->logs_.emplace_back(new_log_number, new_log);
     }
-
     if (s.ok()) {
       if (impl->two_write_queues_) {
         impl->log_write_mutex_.Lock();
@@ -1857,6 +1864,8 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     }
   }
   if (s.ok()) {
+    // 上面的recover 以及 recover之后的一些数据修复问题处理完了，需要将 column_family_data、
+    // column_family 的 op 以及 version list 相关元信息存储到 manifest 里面
     s = impl->LogAndApplyForRecovery(recovery_ctx);
   }
 
@@ -1865,6 +1874,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     s = impl->InitPersistStatsColumnFamily();
   }
 
+  // 3. 进行 cf 的handle 初始化
   if (s.ok()) {
     // set column family handles
     for (auto cf : column_families) {
@@ -1895,6 +1905,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   }
 
   if (s.ok()) {
+    // todo 不知道这里是做什么
     SuperVersionContext sv_context(/* create_superversion */ true);
     for (auto cfd : *impl->versions_->GetColumnFamilySet()) {
       impl->InstallSuperVersionAndScheduleWork(
@@ -1908,6 +1919,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     s = impl->PersistentStatsProcessFormatVersion();
   }
 
+  // 4. 对 column family data 做一些参数调整
   if (s.ok()) {
     for (auto cfd : *impl->versions_->GetColumnFamilySet()) {
       if (cfd->ioptions()->compaction_style == kCompactionStyleFIFO) {
@@ -1937,6 +1949,9 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
       }
     }
   }
+
+  // 5. 将 db options 持久化，然后标记db 打开成功，并执行 obsolete 文件的处理
+  // 以及 进行compaction
   TEST_SYNC_POINT("DBImpl::Open:Opened");
   Status persist_options_status;
   if (s.ok()) {
