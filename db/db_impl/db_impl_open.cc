@@ -1971,6 +1971,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   impl->mutex_.Unlock();
 
 #ifndef ROCKSDB_LITE
+  // 6. 统计 sst 文件大小
   auto sfm = static_cast<SstFileManagerImpl*>(
       impl->immutable_db_options_.sst_file_manager.get());
   if (s.ok() && sfm) {
