@@ -139,6 +139,11 @@ void atomic_play() {
 
 }
 
+// todo play pthread_cond_wait and pthread_cond_signal
+void pthread_play() {
+
+}
+
 int main() {
   //  test_key();
   //  remove_duplicate();
