@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <atomic>
 
 #include "stdexcept"
 #include "unordered_map"
@@ -98,10 +99,68 @@ void play_unordered_map() {
   }
 }
 
+#define XXPH_NAMESPACE ROCKSDB_
+#define XXPH_CAT(A,B) A##B
+#define XXPH_NAME2(A,B) XXPH_CAT(A,B)
+#define XXPH3_64bits_withSeed XXPH_NAME2(XXPH_NAMESPACE, XXPH3_64bits_withSeed)
+
+static uint64_t XXPH3_64bits_withSeed(uint64_t a, uint64_t b) {
+  return a + b;
+}
+
+
+#if defined(__GNUC__) && __GNUC__ >= 4
+#define LIKELY(x)   (__builtin_expect((x), 1))
+#define UNLIKELY(x) (__builtin_expect((x), 0))
+#else
+#define LIKELY(x)   (x)
+#define UNLIKELY(x) (x)
+#endif
+
+void atomic_play() {
+  // atomic play
+  std::atomic<std::string*> atomic_str;
+  std::string str = "123";
+  atomic_str.store(&str);
+  auto p_str = atomic_str.load(std::memory_order_relaxed);
+  printf("first get from atomic_str, p_str: %s\n", p_str->c_str());
+
+  std::string str1 = "456";
+  atomic_str.store(&str1);
+
+  std::string set_str = "789";
+  bool ok = atomic_str.compare_exchange_weak(p_str, &set_str);
+  printf("exchange ok: %d, compare_exchange_weak: p_str: %s\n", ok, p_str->c_str());
+
+  ok = atomic_str.compare_exchange_weak(p_str, &set_str);
+  if (ok) {
+    printf("is p_str a nullptr? %d\n", p_str == nullptr);
+  }
+
+}
+
 int main() {
   //  test_key();
   //  remove_duplicate();
 //  play_unordered_map();
+
   size_t ts_sz = 8;
   std::string dummy_ts(ts_sz, '\0');
+  printf("%llu\n", XXPH3_64bits_withSeed(1, 2));
+  std::array<std::string, 2> str_list{"1", "2"};
+  auto data = str_list.data();
+  for (int i = 0; i < str_list.size(); ++i) {
+    printf("val: %s\n", data->c_str());
+    ++data;
+  }
+  data = nullptr;
+  if UNLIKELY (true) {
+    printf("11111111\n");
+  }
+
+  if LIKELY (true) {
+    printf("2222\n");
+  }
+
+  atomic_play();
 }

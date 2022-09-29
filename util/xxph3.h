@@ -426,7 +426,7 @@ typedef struct {
 #  include <assert.h>   /* note : can still be disabled with NDEBUG */
 #  define XXPH_ASSERT(c)   assert(c)
 #else
-#  define XXPH_ASSERT(c)   ((void)0)
+#  define XXPH_ASSERT(c)   ((void)0) // (void)0 与 NULL等价
 #endif
 
 /* note : use after variable declarations */

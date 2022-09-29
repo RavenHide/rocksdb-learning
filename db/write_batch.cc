@@ -483,7 +483,7 @@ Status WriteBatchInternal::Iterate(const WriteBatch* wb,
       last_was_try_again = false;
       tag = 0;
       column_family = 0;  // default
-
+      // 把 batch write里rep的数据decode出来
       s = ReadRecordFromWriteBatch(&input, &tag, &column_family, &key, &value,
                                    &blob, &xid);
       if (!s.ok()) {
@@ -753,16 +753,24 @@ Status WriteBatchInternal::Put(WriteBatch* b, uint32_t column_family_id,
   }
 
   LocalSavePoint save(b);
+  // -------------------------------------------------------------------------------------------------------------------------------
+  // | 8 bytes  | 4 bytes | 1 bytes | variable uint32（可选）| variable uint32 | size_of_key bytes |  variable uint32 |  size_of_val |
+  // -------------------------------------------------------------------------------------------------------------------------------
+  // | headers | count    | op_type |  column_family_id   | size_of_key     | data_of_key       |  size_of_val      |  data_of_val |
+  //--------------------------------------------------------------------------------------------------------------------------------
   WriteBatchInternal::SetCount(b, WriteBatchInternal::Count(b) + 1);
   if (column_family_id == 0) {
     b->rep_.push_back(static_cast<char>(kTypeValue));
   } else {
     b->rep_.push_back(static_cast<char>(kTypeColumnFamilyValue));
+    // todo column_family_id 并没有按照 header、count、operation_type、length的格式来存储，
+    //  到时候如何取解码出来?
     PutVarint32(&b->rep_, column_family_id);
   }
   PutLengthPrefixedSlice(&b->rep_, key);
   PutLengthPrefixedSlice(&b->rep_, value);
   b->content_flags_.store(
+      // 0000 0000 | 0000 0010 = 0000 0010 即 2
       b->content_flags_.load(std::memory_order_relaxed) | ContentFlags::HAS_PUT,
       std::memory_order_relaxed);
   if (b->prot_info_ != nullptr) {
@@ -772,6 +780,7 @@ Status WriteBatchInternal::Put(WriteBatch* b, uint32_t column_family_id,
     // (a missing/extra encoded CF ID would corrupt another field). It is
     // convenient to consolidate on `kTypeValue` here as that is what will be
     // inserted into memtable.
+    // 对 key、value、op_type以及column_family_id做hash
     b->prot_info_->entries_.emplace_back(ProtectionInfo64()
                                              .ProtectKVO(key, value, kTypeValue)
                                              .ProtectC(column_family_id));
@@ -2922,6 +2931,7 @@ Status WriteBatchInternal::UpdateProtectionInfo(WriteBatch* wb,
     }
   } else if (bytes_per_key == 8) {
     if (wb->prot_info_ == nullptr) {
+      // 把 my_batch中的每一个 操作 对应的数据，一一将他们的sum hash值 写入到 my_batch.prot_info里面
       wb->prot_info_.reset(new WriteBatch::ProtectionInfo());
       ProtectionInfoUpdater prot_info_updater(wb->prot_info_.get());
       return wb->Iterate(&prot_info_updater);

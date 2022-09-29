@@ -107,11 +107,13 @@ void DBImpl::SetRecoverableStatePreReleaseCallback(
 
 Status DBImpl::Write(const WriteOptions& write_options, WriteBatch* my_batch) {
   Status s;
+  // 检查是否需要更新 my_batch.prot_info
   if (write_options.protection_bytes_per_key > 0) {
     s = WriteBatchInternal::UpdateProtectionInfo(
         my_batch, write_options.protection_bytes_per_key);
   }
   if (s.ok()) {
+    // 开始将数据写入到 MemTable，同时会更新wal
     s = WriteImpl(write_options, my_batch, /*callback=*/nullptr,
                   /*log_used=*/nullptr);
   }
@@ -249,6 +251,10 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     uint64_t seq = 0;
     // Use a write thread to i) optimize for WAL write, ii) publish last
     // sequence in in increasing order, iii) call pre_release_callback serially
+    // 2PC 提交，特别对于 transaction DB来说，先写wal，在commit的时候 再写入memTable
+    // 而不是先把写数据缓存在 write batch，然后在最后提交阶段一股脑写wal 和 memTable，这样会把压力
+    // 都堆积到commit阶段。
+    // todo 阅读WriteImplWALOnly实现
     Status status = WriteImplWALOnly(
         &write_thread_, write_options, my_batch, callback, log_used, log_ref,
         &seq, sub_batch_cnt, pre_release_callback, kDoAssignOrder,
@@ -262,6 +268,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     }
     if (!disable_memtable) {
       TEST_SYNC_POINT("DBImpl::WriteImpl:BeforeUnorderedWriteMemtable");
+      // todo 阅读无序写Mem table的实现
       status = UnorderedWriteMemtable(write_options, my_batch, callback,
                                       log_ref, seq, sub_batch_cnt);
     }
@@ -269,16 +276,18 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   }
 
   if (immutable_db_options_.enable_pipelined_write) {
+    // todo 阅读 pipelined write 的实现
     return PipelinedWriteImpl(write_options, my_batch, callback, log_used,
                               log_ref, disable_memtable, seq_used);
   }
 
+  // 默认正常的一个写请求的处理
   PERF_TIMER_GUARD(write_pre_and_post_process_time);
   WriteThread::Writer w(write_options, my_batch, callback, log_ref,
                         disable_memtable, batch_cnt, pre_release_callback,
                         post_memtable_callback);
   StopWatch write_sw(immutable_db_options_.clock, stats_, DB_WRITE);
-
+  // 写线程加入一个 Write 作业
   write_thread_.JoinBatchGroup(&w);
   if (w.state == WriteThread::STATE_PARALLEL_MEMTABLE_WRITER) {
     // we are a non-leader in a parallel group

@@ -22,6 +22,16 @@ namespace ROCKSDB_NAMESPACE {
 #endif
 char* EncodeVarint32(char* dst, uint32_t v) {
   // Operate on characters as unsigneds
+  // 每个 byte 存储 7个bit 的数据，第8位 作为标记不存储具体的值,
+  // 第 8 位为 1 时表示 当前前7bit的数据值大于等于128即, [128, 256),
+  // 同时需要读取下个byte 的数据，若下一个byte 的 第八位 依旧为1，
+  // 就再读取下下个byte。最多只会读取5byte的数据。
+
+  // |------------------------------------------------------|
+  // |                    1 byte            |  1 byte | 1 byte | 1 byte | 1 byte |
+  // |         7 bits    |      1_bit       | ....... | ..... | ....... | ...... |
+  // | v 的前7bit的数据   | 大小的标记值,       |
+  // |                  | v < 1 << 7 时，为0 |
   unsigned char* ptr = reinterpret_cast<unsigned char*>(dst);
   static const int B = 128;
   if (v < (1 << 7)) {

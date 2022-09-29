@@ -22,13 +22,10 @@ int main() {
   // optimize RocksDB.
   opt.IncreaseParallelism();
   opt.OptimizeLevelStyleCompaction();
-
   opt.create_if_missing = true;
-
   // open DB
   Status s = DB::Open(opt, DBPath, &db);
   assert(s.ok());
-
   // Put Key-Value
   std::string key = "key1";
   s = db->Put(WriteOptions(), key, "v1");

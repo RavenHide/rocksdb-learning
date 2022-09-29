@@ -24,7 +24,85 @@ inline bool init_db(std::unique_ptr<rocksdb::TransactionDB>* db_prt) {
   }
 }
 
-void play_transaction() {
+void play_repeated_read_transaction() {
+  // init db
+  std::unique_ptr<rocksdb::TransactionDB> txn_db{};
+  bool ok = init_db(&txn_db);
+  assert(ok);
+
+  ////////////////////////////////////////////////////////
+  //
+  // "Repeatable Read" (Snapshot Isolation) Example
+  //   -- Using a single Snapshot
+  //
+  ////////////////////////////////////////////////////////
+
+  rocksdb::Slice key = "abc";
+
+  rocksdb::WriteOptions w_opts{};
+  rocksdb::Status s = txn_db->Put(w_opts, key, "abc1");
+  assert(s.ok());
+
+  rocksdb::TransactionOptions txn_opts{};
+  txn_opts.set_snapshot = true;
+
+  // start transaction
+  rocksdb::Transaction* txn = txn_db->BeginTransaction(w_opts, txn_opts);
+
+  //read latest committed value
+  rocksdb::ReadOptions r_opts{};
+  std::string val{};
+  s = txn->Get(r_opts, key, &val);
+  assert(s.ok());
+  assert(val == "abc1");
+  val.clear();
+
+//  s = txn_db->Put(w_opts, key, "abc2");
+//  assert(s.ok());
+//
+//  // read the latest committed value
+//  s = txn->Get(r_opts, key, &val);
+//  assert(s.ok());
+//  assert(val == "abc2");
+//  val.clear();
+
+  // Read the snapshotted value.
+  r_opts.snapshot = txn->GetSnapshot();
+
+  // lock key and no one else can write with this key outside this transaction
+  s = txn->GetForUpdate(r_opts, key, &val);
+  assert(s.ok());
+  assert(val == "abc1");
+  val.clear();
+
+  s = txn_db->Put(w_opts, key, "abcabc");
+  printf("msg: %s\n", s.ToString().c_str());
+  assert(!s.ok());
+
+  // update in this transaction
+  s = txn->Put(key, "abc3");
+  printf("msg: %s\n", s.ToString().c_str());
+  assert(s.ok());
+
+  // repeated read in snapshot isolation
+  s = txn->Get(r_opts, key, &val);
+  assert(s.ok());
+  assert(val == "abc3");
+  val.clear();
+
+  // read with lock
+  s = txn->GetForUpdate(r_opts, key, &val);
+  assert(s.ok());
+  assert(val == "abc3");
+  val.clear();
+
+  s = txn->Commit();
+  assert(s.ok());
+  delete txn;
+  r_opts.snapshot = nullptr;
+}
+
+void play_read_commit_transaction() {
   std::unique_ptr<rocksdb::TransactionDB> db_ptr{};
   bool ok = init_db(&db_ptr);
   assert(ok);
@@ -94,11 +172,12 @@ void play_transaction() {
 
 // build cmd
 // linux
-// g++-7 merge_example.cc ../librocksdb.a -o merge_example.out -I ../include/ -I ../ -std=c++17 -lpthread -lz  -lbz2 -lzstd -ldl -lsnappy -llz4  -DROCKSDB_PLATFORM_POSIX -fno-rtti
+// g++-7 play_transaction_example.cc ../librocksdb.a -o play_transaction_example.out -I ../include/ -I ../ -std=c++17 -lpthread -lz  -lbz2 -lzstd -ldl -lsnappy -llz4  -DROCKSDB_PLATFORM_POSIX -fno-rtti
 //
 // macos
 // clang++ merge_example.cc ../librocksdb.a -o merge_example.out -I ../include/ -I ../ -std=c++17 -lpthread -lz  -lbz2 -lzstd -ldl   -DROCKSDB_PLATFORM_POSIX -fno-rtti -DOS_MACOSX
 
 int main() {
-  play_transaction();
+//  play_read_commit_transaction();
+  play_repeated_read_transaction();
 }

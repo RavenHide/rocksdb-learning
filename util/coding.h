@@ -285,6 +285,10 @@ inline bool GetFixed16(Slice* input, uint16_t* value) {
 }
 
 inline bool GetVarint32(Slice* input, uint32_t* value) {
+  //          |<------------------- input ---------------->|
+  //          |var_uint32 |<------- length = limit - q --->|
+  // ---------|----------|---------------------------------|----------->
+  //          p          q                               limit
   const char* p = input->data();
   const char* limit = p + input->size();
   const char* q = GetVarint32Ptr(p, limit, value);
