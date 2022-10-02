@@ -154,7 +154,7 @@ int main() {
   printf("%llu\n", XXPH3_64bits_withSeed(1, 2));
   std::array<std::string, 2> str_list{"1", "2"};
   auto data = str_list.data();
-  for (int i = 0; i < str_list.size(); ++i) {
+  for (size_t i = 0; i < str_list.size(); ++i) {
     printf("val: %s\n", data->c_str());
     ++data;
   }
