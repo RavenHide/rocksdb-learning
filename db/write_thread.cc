@@ -71,11 +71,13 @@ uint8_t WriteThread::AwaitState(Writer* w, uint8_t goal_mask,
   // is the effect of the pause instruction), so 200 iterations is a bit
   // more than a microsecond.  This is long enough that waits longer than
   // this can amortize the cost of accessing the clock and yielding.
+  // 这里应该是 short-contented
   for (uint32_t tries = 0; tries < 200; ++tries) {
     state = w->state.load(std::memory_order_acquire);
     if ((state & goal_mask) != 0) {
       return state;
     }
+    // todo 不清楚 asm volatile("pause") 是什么意思，暂时猜测是 sleep
     port::AsmVolatilePause();
   }
 
@@ -135,13 +137,13 @@ uint8_t WriteThread::AwaitState(Writer* w, uint8_t goal_mask,
   bool update_ctx = false;
   // Should we reinforce the yield credit
   bool would_spin_again = false;
-  // The samling base for updating the yeild credit. The sampling rate would be
+  // The sampling base for updating the yield credit. The sampling rate would be
   // 1/sampling_base.
   const int sampling_base = 256;
 
   if (max_yield_usec_ > 0) {
     update_ctx = Random::GetTLSInstance()->OneIn(sampling_base);
-
+    // 这里应该是 short-uncontented
     if (update_ctx || yield_credit.load(std::memory_order_relaxed) >= 0) {
       // we're updating the adaptation statistics, or spinning has >
       // 50% chance of being shorter than max_yield_usec_ and causing no
@@ -155,6 +157,8 @@ uint8_t WriteThread::AwaitState(Writer* w, uint8_t goal_mask,
       auto iter_begin = spin_begin;
       while ((iter_begin - spin_begin) <=
              std::chrono::microseconds(max_yield_usec_)) {
+        // 每次 sleep 100 micro sec, 但如果在该线程所在优先级的队列上，没有可调度的线程，
+        // 则不会进行阻塞，而是直接继续运行
         std::this_thread::yield();
 
         state = w->state.load(std::memory_order_acquire);
@@ -165,6 +169,7 @@ uint8_t WriteThread::AwaitState(Writer* w, uint8_t goal_mask,
         }
 
         auto now = std::chrono::steady_clock::now();
+        // now == iter_begin 表示std::this_thread::yield()没有阻塞.
         if (now == iter_begin ||
             now - iter_begin >= std::chrono::microseconds(slow_yield_usec_)) {
           // conservatively count it as a slow yield if our clock isn't
@@ -182,6 +187,7 @@ uint8_t WriteThread::AwaitState(Writer* w, uint8_t goal_mask,
     }
   }
 
+  // 加锁进行等待，这里应该是 long
   if ((state & goal_mask) == 0) {
     TEST_SYNC_POINT_CALLBACK("WriteThread::AwaitState:BlockingWaiting", w);
     state = BlockingAwaitState(w, goal_mask);
@@ -382,6 +388,8 @@ void WriteThread::JoinBatchGroup(Writer* w) {
   TEST_SYNC_POINT_CALLBACK("WriteThread::JoinBatchGroup:Start", w);
   assert(w->batch != nullptr);
 
+  // 将 w 插入到 newest_writer_ 队列的头部。线程安全
+  // 若插入时，整个队列是empty的，则把 w 当成leader,即 linked_as_leader == true
   bool linked_as_leader = LinkOne(w, &newest_writer_);
 
   if (linked_as_leader) {

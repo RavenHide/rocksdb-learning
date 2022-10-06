@@ -288,6 +288,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
                         post_memtable_callback);
   StopWatch write_sw(immutable_db_options_.clock, stats_, DB_WRITE);
   // 写线程加入一个 Write 作业
+  // todo 如果不是 并行写 状态，那执行 Writer 的逻辑在哪里触发
   write_thread_.JoinBatchGroup(&w);
   if (w.state == WriteThread::STATE_PARALLEL_MEMTABLE_WRITER) {
     // we are a non-leader in a parallel group
@@ -295,7 +296,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     if (w.ShouldWriteToMemtable()) {
       PERF_TIMER_STOP(write_pre_and_post_process_time);
       PERF_TIMER_GUARD(write_memtable_time);
-
+      // 将数据写入Mem Table
       ColumnFamilyMemTablesImpl column_family_memtables(
           versions_->GetColumnFamilySet());
       w.status = WriteBatchInternal::InsertInto(

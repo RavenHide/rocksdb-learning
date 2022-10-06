@@ -483,7 +483,8 @@ Status WriteBatchInternal::Iterate(const WriteBatch* wb,
       last_was_try_again = false;
       tag = 0;
       column_family = 0;  // default
-      // 把 batch write里rep的数据decode出来
+      // 把 batch write里rep的数据decode出来, 同时更新input的数据长度，已经读取过的数据，
+      // 无法再从input中读取
       s = ReadRecordFromWriteBatch(&input, &tag, &column_family, &key, &value,
                                    &blob, &xid);
       if (!s.ok()) {
@@ -1826,7 +1827,7 @@ class MemTableInserter : public WriteBatch::Handler {
     if (has_valid_writes_ != nullptr) {
       *has_valid_writes_ = true;
     }
-
+    // 只有在 recovery 模式下, log_number_ref_ 才会 > 0
     if (log_number_ref_ > 0) {
       cf_mems_->GetMemTable()->RefLogContainingPrepSection(log_number_ref_);
     }
@@ -1844,8 +1845,10 @@ class MemTableInserter : public WriteBatch::Handler {
                                      value);
       // else insert the values to the memtable right away
     }
-
+    // status  默认状态是 OK
     Status ret_status;
+    // 正常情况下 SeekToColumnFamily 都是返回true，只有在recover模式下，可能会返回false
+    // 另外 无效的 column_family_id也会返回false
     if (UNLIKELY(!SeekToColumnFamily(column_family_id, &ret_status))) {
       if (ret_status.ok() && rebuilding_trx_ != nullptr) {
         assert(!write_after_commit_);
@@ -1855,6 +1858,8 @@ class MemTableInserter : public WriteBatch::Handler {
         ret_status = WriteBatchInternal::Put(rebuilding_trx_, column_family_id,
                                              key, value);
         if (ret_status.ok()) {
+          // IsDuplicateKeySeq 可以判断在同一个 SeqNumber 下，是否存在重复的key
+          // MaybeAdvanceSeq 对 sequence 递增
           MaybeAdvanceSeq(IsDuplicateKeySeq(column_family_id, key));
         }
       } else if (ret_status.ok()) {
@@ -2744,6 +2749,7 @@ Status WriteBatchInternal::InsertInto(
   SetSequence(writer->batch, sequence);
   inserter.set_log_number_ref(writer->log_ref);
   inserter.set_prot_info(writer->batch->prot_info_.get());
+  // 遍历batch write，将batch里面的操作任务一一用 MemTableInserter 来执行
   Status s = writer->batch->Iterate(&inserter);
   assert(!seq_per_batch || batch_cnt != 0);
   assert(!seq_per_batch || inserter.sequence() - sequence == batch_cnt);

@@ -163,6 +163,8 @@ using Thread = std::thread;
 
 static inline void AsmVolatilePause() {
 #if defined(__i386__) || defined(__x86_64__)
+  // asm 表示gcc声明内联汇编表达式
+  // volatile 表示 告诉编译器该声明的表达式，不做内联汇编优化，保持原有声明顺序
   asm volatile("pause");
 #elif defined(__aarch64__)
   asm volatile("isb");

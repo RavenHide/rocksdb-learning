@@ -11,9 +11,11 @@
 #include <vector>
 #include <atomic>
 
-#include "stdexcept"
-#include "unordered_map"
-#include "array"
+#include <stdexcept>
+#include <unordered_map>
+#include <array>
+#include "pthread_play_mutex.h"
+#include <unistd.h>
 
 inline bool IsLittleEndian() {
   uint32_t x = 1;
@@ -139,9 +141,77 @@ void atomic_play() {
 
 }
 
+void* P1Running(void* args) {
+  printf("p1 start running\n");
+  auto cond_mutex = (PthreadPlayMutex*)args;
+  cond_mutex->Lock();
+
+  uint32_t sleep_t = 2;
+  printf("p1 start to wait\n");
+  cond_mutex->Wait();
+
+  printf("p1 get lock, and exit from wait status\n");
+
+  sleep(sleep_t);
+  printf("p1 sleep %du seconds after wake up from sleeping\n", sleep_t);
+
+  printf("release lock\n");
+  cond_mutex->Unlock();
+  return 0;
+}
+
+
+void* P2Running(void* args) {
+  printf("p2 start running\n");
+  auto cond_mutex = (PthreadPlayMutex*)args;
+  cond_mutex->Lock();
+
+  uint32_t sleep_t = 2;
+  printf("p2 start to wait\n");
+  cond_mutex->Wait();
+
+  printf("p2 get lock, and exit from wait status\n");
+
+  sleep(sleep_t);
+  printf("p1 sleep %du seconds after wake up from sleeping\n", sleep_t);
+
+  printf("p2 release lock\n");
+  cond_mutex->Unlock();
+  return 0;
+//  printf("p2 start running and sleep for 4s\n");
+//  sleep(4);
+//  auto cond_mutex = (PthreadPlayMutex*)args;
+//  cond_mutex->Lock();
+//
+//  uint32_t sleep_t = 1;
+//  printf("p2 sleep %d\n", sleep_t);
+//  sleep(sleep_t);
+//
+//  printf("p2 release lock\n");
+//  cond_mutex->Unlock();
+//
+//  printf("p2 send signal\n");
+//  cond_mutex->Signal();
+//  return 0;
+}
+
 // todo play pthread_cond_wait and pthread_cond_signal
 void pthread_play() {
+  PthreadPlayMutex cond_mutex{};
+  pthread_t p1{};
+  pthread_t p2{};
+  // running thread
+  pthread_create(&p1, nullptr, P1Running, (void *)&cond_mutex);
+  pthread_create(&p2, nullptr, P2Running, (void *)&cond_mutex);
 
+  printf("main thread sleep 1 and waits for sub_threads\n");
+  sleep(1);
+  cond_mutex.Lock();
+  cond_mutex.SignalAll();
+  printf("main thread sign all\n");
+  cond_mutex.Unlock();
+  pthread_join(p1, nullptr);
+  pthread_join(p2, nullptr);
 }
 
 int main() {
@@ -149,23 +219,25 @@ int main() {
   //  remove_duplicate();
 //  play_unordered_map();
 
-  size_t ts_sz = 8;
-  std::string dummy_ts(ts_sz, '\0');
-  printf("%llu\n", XXPH3_64bits_withSeed(1, 2));
-  std::array<std::string, 2> str_list{"1", "2"};
-  auto data = str_list.data();
-  for (size_t i = 0; i < str_list.size(); ++i) {
-    printf("val: %s\n", data->c_str());
-    ++data;
-  }
-  data = nullptr;
-  if UNLIKELY (true) {
-    printf("11111111\n");
-  }
+//  size_t ts_sz = 8;
+//  std::string dummy_ts(ts_sz, '\0');
+//  printf("%llu\n", XXPH3_64bits_withSeed(1, 2));
+//  std::array<std::string, 2> str_list{"1", "2"};
+//  auto data = str_list.data();
+//  for (size_t i = 0; i < str_list.size(); ++i) {
+//    printf("val: %s\n", data->c_str());
+//    ++data;
+//  }
+//  data = nullptr;
+//  if UNLIKELY (true) {
+//    printf("11111111\n");
+//  }
+//
+//  if LIKELY (true) {
+//    printf("2222\n");
+//  }
 
-  if LIKELY (true) {
-    printf("2222\n");
-  }
+//  atomic_play();
 
-  atomic_play();
+  pthread_play();
 }
