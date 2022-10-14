@@ -110,7 +110,10 @@ char* Arena::AllocateFallback(size_t bytes, bool aligned) {
     block_head = AllocateNewBlock(size);
   }
   alloc_bytes_remaining_ = size - bytes;
-
+  // 如果 aligned == true, 则使用 aligned_alloc_ptr_ 来进行内存分配的指针, 范围是[block_head, aligned_alloc_ptr_]
+  // 从前往后进行内存分配
+  // 反之 则使用 unaligned_alloc_ptr_ 来进行内存分配, 范围是 [aligned_alloc_ptr_, unaligned_alloc_ptr_]
+  // 从后往前进行内存分配
   if (aligned) {
     aligned_alloc_ptr_ = block_head + bytes;
     unaligned_alloc_ptr_ = block_head + size;
@@ -208,6 +211,8 @@ char* Arena::AllocateNewBlock(size_t block_bytes) {
   //   yet.
   // - If `new` throws, no memory leaks because the vector will be cleaned up
   //   via RAII.
+  // 因为 vector 执行 emplace_back 会可能触发动态扩容，所以这里先插入一个 nullptr， 确认可以
+  // 正常插入后，在进行内存分配，最后再把分配的内存block 覆盖到对应的position
   blocks_.emplace_back(nullptr);
 
   char* block = new char[block_bytes];

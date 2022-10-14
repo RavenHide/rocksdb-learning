@@ -16,6 +16,8 @@
 #include <array>
 #include "pthread_play_mutex.h"
 #include <unistd.h>
+#include "mutex"
+#include "iostream"
 
 inline bool IsLittleEndian() {
   uint32_t x = 1;
@@ -214,6 +216,21 @@ void pthread_play() {
   pthread_join(p2, nullptr);
 }
 
+void play_mutex() {
+  std::mutex m1{};
+  std::unique_lock<std::mutex> l1(m1, std::defer_lock);
+  std::cout << "owns_lock: ?" << l1.owns_lock() << std::endl;
+  l1.lock();
+  std::cout << "owns_lock: ?" << l1.owns_lock() << std::endl;
+  l1.unlock();
+  std::cout << "owns_lock: ?" << l1.owns_lock() << std::endl;
+}
+
+template <typename Func>
+void PlayDynamicFunc(const Func& func) {
+  func();
+}
+
 int main() {
   //  test_key();
   //  remove_duplicate();
@@ -239,5 +256,7 @@ int main() {
 
 //  atomic_play();
 
-  pthread_play();
+//  pthread_play();
+//  play_mutex();
+  std::cout << "max_align_t: " << alignof(max_align_t) << std::endl;
 }

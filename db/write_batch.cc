@@ -1847,6 +1847,8 @@ class MemTableInserter : public WriteBatch::Handler {
     }
     // status  默认状态是 OK
     Status ret_status;
+    // SeekToColumnFamily 会 初始化 cf_mems->current_，所以 在Seek之后，cf_mems_->GetMemTable()
+    // 才返回的是对应column_family_id 的 mem table
     // 正常情况下 SeekToColumnFamily 都是返回true，只有在recover模式下，可能会返回false
     // 另外 无效的 column_family_id也会返回false
     if (UNLIKELY(!SeekToColumnFamily(column_family_id, &ret_status))) {
@@ -1869,6 +1871,7 @@ class MemTableInserter : public WriteBatch::Handler {
     }
     assert(ret_status.ok());
 
+    // 前面执行了 cf_mems_->SeekToColumnFamily 所以这里才会有值
     MemTable* mem = cf_mems_->GetMemTable();
     auto* moptions = mem->GetImmutableMemTableOptions();
     // inplace_update_support is inconsistent with snapshots, and therefore with

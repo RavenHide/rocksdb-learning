@@ -32,10 +32,20 @@ ConcurrentArena::ConcurrentArena(size_t block_size, AllocTracker* tracker,
   Fixup();
 }
 
+// 重新选一个cpu的local cache
 ConcurrentArena::Shard* ConcurrentArena::Repick() {
+  // ----------------------
+  // | first   |  second  |
+  // | shard   | cpu_no   |
+  // ----------------------
   auto shard_and_index = shards_.AccessElementAndIndex();
   // even if we are cpu 0, use a non-zero tls_cpuid so we can tell we
   // have repicked
+  // shards_.Size() = 2 的 n 次方，而 shard_and_index.second | shards_.Size() 的结果
+  // 是离散分布 且呈指数级别增长， 指数为2, 如
+  // 2^n - 1, 2^(n+1) - 1, 2^(n+2) -1， 而tls_cpuid 只能是 该分布下的其中一个值，
+  // 并且取决于 shard_and_index.second的大小
+  // 举个例子，若 2^n - 1 < shard_and_index.second <= 2^(n+1) - 1，则tls_cpuid = 2^(n+1)
   tls_cpuid = shard_and_index.second | shards_.Size();
   return shard_and_index.first;
 }

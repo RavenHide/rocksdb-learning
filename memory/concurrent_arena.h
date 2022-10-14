@@ -138,20 +138,28 @@ class ConcurrentArena : public Allocator {
          !shards_.AccessAtCore(0)->allocated_and_unused_.load(
              std::memory_order_relaxed) &&
          arena_lock.try_lock())) {
+
       if (!arena_lock.owns_lock()) {
         arena_lock.lock();
       }
+      // 调用函数进行内存分配
       auto rv = func();
+      // 对当前的内存情况的统计数据进行更新
       Fixup();
       return rv;
     }
 
     // pick a shard from which to allocate
+    // cpu & (shards_.Size() - 1)) 等价于 cpu % (shards_.Size() - 1),
+    // 因为 shards_.Size() 是 等于 2 的 n次方, 其代码逻辑为 static_cast<size_t>(1) << size_shift_
     Shard* s = shards_.AccessAtCore(cpu & (shards_.Size() - 1));
     if (!s->mutex.try_lock()) {
+
+      // 如果当前使用的cpu获取锁失败了，则尝试重新另选一个cpu，并进行加锁操作
       s = Repick();
       s->mutex.lock();
     }
+    // 转移 mutex 的所有权 到 lock 实例上，这样当前函数执行完后，lock会被自动释放
     std::unique_lock<SpinMutex> lock(s->mutex, std::adopt_lock);
 
     size_t avail = s->allocated_and_unused_.load(std::memory_order_relaxed);
@@ -163,7 +171,6 @@ class ConcurrentArena : public Allocator {
       // size, we adjust our request to avoid arena waste.
       auto exact = arena_allocated_and_unused_.load(std::memory_order_relaxed);
       assert(exact == arena_.AllocatedAndUnused());
-
       if (exact >= bytes && arena_.IsInInlineBlock()) {
         // If we haven't exhausted arena's inline block yet, allocate from arena
         // directly. This ensures that we'll do the first few small allocations
