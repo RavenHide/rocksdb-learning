@@ -132,6 +132,8 @@ class InlineSkipList {
   // inserted immediately after the splice.  allow_partial_splice_fix ==
   // false has worse running time for the non-sequential case O(log N),
   // but a better constant factor.
+  // 具体实现是在 InlineSkipList<Comparator>::Insert
+
   template <bool UseCAS>
   bool Insert(const char* key, Splice* splice, bool allow_partial_splice_fix);
 
@@ -298,6 +300,13 @@ template <class Comparator>
 struct InlineSkipList<Comparator>::Node {
   // Stores the height of the node in the memory location normally used for
   // next_[0].  This is used for passing data from AllocateKey to Insert.
+  // Node 的 next数组结构是一个反向结构，即需要从右边往左边遍历
+  // ----------------------------------------------------------
+  // | next_[height-1] | next_[height-2] | ....... | next_[0] |
+  // ----------------------------------------------------------
+  // 所以在分配内存时，是会分配 node_size * height 这样连续的内存的
+  // todo 为什么要设计为反向呢？
+
   void StashHeight(const int height) {
     assert(sizeof(int) <= sizeof(next_[0]));
     memcpy(static_cast<void*>(&next_[0]), &height, sizeof(int));
@@ -657,9 +666,18 @@ InlineSkipList<Comparator>::InlineSkipList(const Comparator cmp,
          kBranching_ == static_cast<uint32_t>(branching_factor));
   assert(kScaledInverseBranching_ > 0);
 
+  // head_->SetNext(0, nullptr) 会将 next_[0] 更新为 nullptr,
+  // 而 next_[0] 在执行了函数 head(AllocateNode(0, max_height))后，是会将 max_height
+  // 写入到 next_[0]中的, 因此 head_->UnstashHeight的返回指为 max_height.
+  // 但是因为这里的 head_->SetNext(0, nullptr), 把 head_->next[0]的值设置为了nullptr
+  // 所以没有从head 里面直接读取 max_height
   for (int i = 0; i < kMaxHeight_; ++i) {
     head_->SetNext(i, nullptr);
   }
+  // head虽然是有next 方法，但是数组实际内存的顺序是从右往左依次增大的
+  // --------------------------------------------------------------------------------
+  // | head_->Next(kMaxHeight_ - 1) | head_->Next(kMaxHeight_ - 2) | .... | head_ |
+  // --------------------------------------------------------------------------------
 }
 
 template <class Comparator>
@@ -677,6 +695,12 @@ InlineSkipList<Comparator>::AllocateNode(size_t key_size, int height) {
   // raw + prefix, and holds the bottom-mode (level 0) skip list pointer
   // next_[0].  key_size is the bytes for the key, which comes just after
   // the Node.
+  // ----------------------------------------------
+  // |                 raw                   |
+  // ----------------------------------------------
+  // |  prefix  | sizeof(Node) + key_size    |
+
+
   char* raw = allocator_->AllocateAligned(prefix + sizeof(Node) + key_size);
   Node* x = reinterpret_cast<Node*>(raw + prefix);
 
@@ -698,6 +722,10 @@ InlineSkipList<Comparator>::AllocateSplice() {
   size_t array_size = sizeof(Node*) * (kMaxHeight_ + 1);
   char* raw = allocator_->AllocateAligned(sizeof(Splice) + array_size * 2);
   Splice* splice = reinterpret_cast<Splice*>(raw);
+  // 一个 Splice 的内存结构如下：
+  // -------------------------------------
+  // | Splice  | prev_array | next_array |
+  // ------------------------------------
   splice->height_ = 0;
   splice->prev_ = reinterpret_cast<Node**>(raw + sizeof(Splice));
   splice->next_ = reinterpret_cast<Node**>(raw + sizeof(Splice) + array_size);
@@ -799,6 +827,8 @@ template <class Comparator>
 template <bool UseCAS>
 bool InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
                                         bool allow_partial_splice_fix) {
+  // todo 不太清楚这里为什么能够保证 reinterpret_cast<Node*>(const_cast<char*>(key)) - 1 刚好
+  // 是前一个Node的内存起始地址
   Node* x = reinterpret_cast<Node*>(const_cast<char*>(key)) - 1;
   const DecodedKey key_decoded = compare_.decode_key(key);
   int height = x->UnstashHeight();
@@ -825,6 +855,7 @@ bool InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
     splice->next_[max_height] = nullptr;
     splice->height_ = max_height;
     recompute_height = max_height;
+    // todo last position of reading
   } else {
     // Splice is a valid proper-height splice that brackets some
     // key, but does it bracket this one?  We need to validate it and

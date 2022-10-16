@@ -231,6 +231,42 @@ void PlayDynamicFunc(const Func& func) {
   func();
 }
 
+void playNode() {
+  struct Node {
+   public:
+    void StashHeight(const int height) {
+      memcpy(static_cast<void*>(&next[0]), &height, sizeof(int));
+    }
+    int UnstashHeight() const {
+      int rv;
+      memcpy(&rv, &next[0], sizeof(int));
+      return rv;
+    }
+    Node* Next(int n) {
+      return ((&next[0] - n)->load(std::memory_order_acquire));
+    }
+    void SetNext(int n, Node* x) {
+      std::cout << "&next[0]: " << &next[0] << ", &next[0] - n: " << &next[0] -n << std::endl;
+      (&next[0] -n)->store(x, std::memory_order_release);
+    }
+   private:
+    std::atomic<Node*> next[1];
+  };
+  int height = 4;
+  auto prefix = sizeof(std::atomic<Node*>) * (height - 1);
+  char* raw = new char[prefix + sizeof(Node)];
+  Node* x = reinterpret_cast<Node*>(raw + prefix);
+  std::cout << "sizeof(int): " << sizeof(int) << std::endl;
+  std::cout << "sizeof(std::atomic<<Node*>): " << sizeof(std::atomic<Node*>) << std::endl;
+  x->StashHeight(height);
+  std::cout << x->UnstashHeight() << std::endl;
+  std::cout << x->UnstashHeight() << std::endl;
+  for (int i = 0; i < height; ++i) {
+    x->SetNext(i, nullptr);
+  }
+  std::cout << x->UnstashHeight() << std::endl;
+}
+
 int main() {
   //  test_key();
   //  remove_duplicate();
@@ -258,5 +294,5 @@ int main() {
 
 //  pthread_play();
 //  play_mutex();
-  std::cout << "max_align_t: " << alignof(max_align_t) << std::endl;
+  playNode();
 }

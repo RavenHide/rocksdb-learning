@@ -105,6 +105,7 @@ char* Arena::AllocateFallback(size_t bytes, bool aligned) {
     block_head = AllocateFromHugePage(size);
   }
 #endif
+  // 永远都会分配一个新的block
   if (!block_head) {
     size = kBlockSize;
     block_head = AllocateNewBlock(size);

@@ -55,6 +55,7 @@ class ConcurrentArena : public Allocator {
 
   char* AllocateAligned(size_t bytes, size_t huge_page_size = 0,
                         Logger* logger = nullptr) override {
+    // 修正分配的内存大小为 指针大小的整数倍
     size_t rounded_up = ((bytes - 1) | (sizeof(void*) - 1)) + 1;
     assert(rounded_up >= bytes && rounded_up < bytes + sizeof(void*) &&
            (rounded_up % sizeof(void*)) == 0);
@@ -165,6 +166,7 @@ class ConcurrentArena : public Allocator {
     size_t avail = s->allocated_and_unused_.load(std::memory_order_relaxed);
     if (avail < bytes) {
       // reload
+      // 因为shard 的内存储量不足，下面需要从arena 里面取内存放到shard 里面，所有需要加锁
       std::lock_guard<SpinMutex> reload_lock(arena_mutex_);
 
       // If the arena's current block is within a factor of 2 of the right
@@ -194,6 +196,10 @@ class ConcurrentArena : public Allocator {
     s->allocated_and_unused_.store(avail - bytes, std::memory_order_relaxed);
 
     char* rv;
+    // 小优化：如果当前是 指针的整数倍数的话，则按 内存对齐来分配内存，这样可以提高cpu读取内存的速度。
+    // 反之，如果不是指针的整数倍的话，按不按内存对齐来分配都没有什么所谓了
+    // 这里之所以是按照指针的整数倍来算，这里个人觉得是跟cpu的高速缓存和cpu之间伪共享有关系，按指针整数倍有利于
+    // 充分利用高速缓存，同时减少多个cpu同时操作同一个内存页的不同数据时，因为伪共享所产生的数据同步开销的放大
     if ((bytes % sizeof(void*)) == 0) {
       // aligned allocation from the beginning
       rv = s->free_begin_;

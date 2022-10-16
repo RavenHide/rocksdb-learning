@@ -541,9 +541,9 @@ Status MemTable::Add(SequenceNumber s, ValueType type,
   //  key bytes    : char[internal_key.size()]
   //  value_size   : varint32 of value.size()
   //  value bytes  : char[value.size()]
-  // ---------------------------------------------------------------------------------------------
-  // | varint32 of key_size + 8 byte | size of key data | varint32 of val_size | size of val data |
-  // ----------------------------------------------------------------------------------------------
+  // -------------------------------------------------------------------------------------------------------------------------------
+  // | varint32 of key_size + 8 byte | size of key data | sequence number and value type | varint32 of val_size | size of val data |
+  // -------------------------------------------------------------------------------------------------------------------------------
 
   uint32_t key_size = static_cast<uint32_t>(key.size());
   uint32_t val_size = static_cast<uint32_t>(value.size());
@@ -580,6 +580,7 @@ Status MemTable::Add(SequenceNumber s, ValueType type,
 
   if (!allow_concurrent) {
     // Extract prefix for insert with hint.
+    // 如果设置前缀了，这里会根据key的前缀来将数据插入到对应前缀索引所在的索引里面
     if (insert_with_hint_prefix_extractor_ != nullptr &&
         insert_with_hint_prefix_extractor_->InDomain(key_slice)) {
       Slice prefix = insert_with_hint_prefix_extractor_->Transform(key_slice);
