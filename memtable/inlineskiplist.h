@@ -828,7 +828,7 @@ template <bool UseCAS>
 bool InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
                                         bool allow_partial_splice_fix) {
   // todo 不太清楚这里为什么能够保证 reinterpret_cast<Node*>(const_cast<char*>(key)) - 1 刚好
-  // 是前一个Node的内存起始地址
+  // todo 是前一个Node的内存起始地址??
   Node* x = reinterpret_cast<Node*>(const_cast<char*>(key)) - 1;
   const DecodedKey key_decoded = compare_.decode_key(key);
   int height = x->UnstashHeight();
