@@ -7,13 +7,13 @@
 #include <vector>
 
 int log2Result(int input) {
- int count = 0;
+  int count = 0;
   input = input >> 1;
   while (input > 0) {
-   ++count;
-   input = input >> 1;
- }
- return count;
+    ++count;
+    input = input >> 1;
+  }
+  return count;
 }
 
 class XFastTrie {
@@ -22,8 +22,19 @@ class XFastTrie {
     this->w = log2Result(u);
     hash_table.reserve(this->w + 1);
     hash_table.assign(this->w + 1, std::unordered_map<int, Node*>());
-    Node root(0, 0);
-    hash_table[0][0] = &root;
+    Node* root = new Node(0, 0);
+    hash_table[0][0] = root;
+  }
+  ~XFastTrie() {
+    for (int level = 0; level <= w; ++level) {
+      auto hit_table = hash_table[level];
+      for (auto item : hit_table) {
+        delete item.second;
+        item.second = nullptr;
+      }
+      hit_table.clear();
+    }
+    hash_table.clear();
   }
 
   class Node {
@@ -32,10 +43,35 @@ class XFastTrie {
     const int level;
     Node *left, *right;
 
-    Node(int key, int level) : key(key), level(level),left(nullptr), right(nullptr) {}
+    static bool HasLeftChild(const Node* node) { return hasChild(node, true); }
+
+    static bool HasRightChild(const Node* node) {
+      return hasChild(node, false);
+    }
+
+    Node(int key, int level)
+        : key(key), level(level), left(nullptr), right(nullptr) {}
     ~Node() {
-     this->left = nullptr;
-     this->right = nullptr;
+      this->left = nullptr;
+      this->right = nullptr;
+    }
+
+   private:
+    static bool hasChild(const Node* node, bool is_left_child) {
+      Node* child_node = nullptr;
+      if (is_left_child) {
+        child_node = node->left;
+      } else {
+        child_node = node->right;
+      }
+
+      if (child_node != nullptr
+          && child_node->level == (node->level + 1) &&
+          (child_node->key >> 1) == node->key) {
+        return true;
+      } else {
+        return false;
+      }
     }
   };
 
@@ -78,7 +114,6 @@ class XFastTrie {
     return node;
   }
 
-
   Node* rightMostLeafNode(Node* node) {
     while (node->level < w) {
       if (node->right != nullptr) {
@@ -96,10 +131,7 @@ class XFastTrie {
   bool Insert(int key);
   int Delete(int key);
 
-
  private:
   int w;
-  std::vector<std::unordered_map<int, Node *>> hash_table;
-
-
+  std::vector<std::unordered_map<int, Node*>> hash_table;
 };
