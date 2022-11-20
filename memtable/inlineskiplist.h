@@ -278,6 +278,19 @@ class InlineSkipList {
 
 // Implementation details follow
 
+/* Slice 结构说明
+ *  从左至右升序  ---->>>>---------------------------------------------------->>>>>>
+ *  | slice  | p_m | .. | p_3 | p_2 | p_1 | key | n_1 | n_2 | n_3 | .. | n_m |
+ *  ------------|----------|------|----|-----------|-----|-----|----------|------|
+ *  | level |   |          |      |    |           |     |     |          |      |
+ *  |   0   |---|----------|------|----|-----------|-----|-----|----------|------|
+ *  |   1   |---|----------|------|---n_p1---k---n_n1----|-----|----------|------|
+ *  |   2   |---|----------|-----n_p2--------k----------n_n2---|----------|------|
+ *  |   3   |---|--------n_p3----------------k----------------n_n3--------|------|
+ *  |  ..   |---|----------------------------k----------------------------|------|
+ *  | max_h |-head---------------------------k---------------------------tail---|
+ *  ------------------------------------------------------------------------------
+ */
 template <class Comparator>
 struct InlineSkipList<Comparator>::Splice {
   // The invariant of a Splice is that prev_[i+1].key <= prev_[i].key <
@@ -885,6 +898,13 @@ bool InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
     // A good strategy is probably to be pessimistic for seq_splice_,
     // optimistic if the caller actually went to the work of providing
     // a Splice.
+    // todo 这里看不太懂
+    // 这段代码大概意思是：在skip_list的某一层，找到两个连续的结点，并且key_decoded 刚好处于两个
+    // 结点之间。
+    // 以下几种情况会对 splice 对当前 key_decoded进行重计算，使得 key_decoded处于skip_list的
+    // 每次一层的某两个结点之间，即处于 splice->prev_[level] 与 splice->next_[level]之间
+    //  1. splice中找不到两个连续的结点
+    //  2. 在splice中找到两个同层的连续结点，并且key_decoded不在splice的下一层的两个结点之间
     while (recompute_height < max_height) {
       if (splice->prev_[recompute_height]->Next(recompute_height) !=
           splice->next_[recompute_height]) {
