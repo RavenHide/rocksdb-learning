@@ -597,6 +597,7 @@ Status MemTable::Add(SequenceNumber s, ValueType type,
 
     // this is a bit ugly, but is the way to avoid locked instructions
     // when incrementing an atomic
+    // 当前这个函数是线程安全的么？可以对 num_entries_ 直接 +1
     num_entries_.store(num_entries_.load(std::memory_order_relaxed) + 1,
                        std::memory_order_relaxed);
     data_size_.store(data_size_.load(std::memory_order_relaxed) + encoded_len,
@@ -608,6 +609,7 @@ Status MemTable::Add(SequenceNumber s, ValueType type,
 
     if (bloom_filter_ && prefix_extractor_ &&
         prefix_extractor_->InDomain(key_without_ts)) {
+      // 对前缀做bloom
       bloom_filter_->Add(prefix_extractor_->Transform(key_without_ts));
     }
     if (bloom_filter_ && moptions_.memtable_whole_key_filtering) {

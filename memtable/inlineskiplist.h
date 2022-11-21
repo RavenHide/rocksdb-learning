@@ -858,7 +858,7 @@ bool InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
     // increased it
   }
   assert(max_height <= kMaxPossibleHeight);
-
+  // 确定是否需要 recompute splice
   int recompute_height = 0;
   if (splice->height_ < max_height) {
     // Either splice has never been used or max_height has grown since
@@ -949,11 +949,13 @@ bool InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
       }
     }
   }
+  // 进行 recompute splice
   assert(recompute_height <= max_height);
   if (recompute_height > 0) {
     RecomputeSpliceLevels(key_decoded, splice, recompute_height);
   }
 
+  // 将新节点插入 skip list
   bool splice_is_valid = true;
   if (UseCAS) {
     for (int i = 0; i < height; ++i) {
@@ -1021,6 +1023,7 @@ bool InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
       splice->prev_[i]->SetNext(i, x);
     }
   }
+
   if (splice_is_valid) {
     for (int i = 0; i < height; ++i) {
       splice->prev_[i] = x;
