@@ -1024,6 +1024,8 @@ bool InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
     }
   }
 
+  // splice_is_valid = false 说明在recompute splice之后，有别的插入或删除也在并发地进行，
+  // 使得 当前splice结果不是最新的
   if (splice_is_valid) {
     for (int i = 0; i < height; ++i) {
       splice->prev_[i] = x;
