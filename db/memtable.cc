@@ -1056,6 +1056,7 @@ Status MemTable::Update(SequenceNumber seq, const Slice& key,
                         const Slice& value,
                         const ProtectionInfoKVOS64* kv_prot_info) {
   LookupKey lkey(key, seq);
+  // memetable_key 由 key_length 、key_data 以及 tag(8bytes) 组成
   Slice mem_key = lkey.memtable_key();
 
   std::unique_ptr<MemTableRep::Iterator> iter(
@@ -1076,6 +1077,7 @@ Status MemTable::Update(SequenceNumber seq, const Slice& key,
     uint32_t key_length = 0;
     const char* key_ptr = GetVarint32Ptr(entry, entry + 5, &key_length);
     if (comparator_.comparator.user_comparator()->Equal(
+            // key_length - 8 是减去tag的数据，这里只比较key
             Slice(key_ptr, key_length - 8), lkey.user_key())) {
       // Correct user key
       const uint64_t tag = DecodeFixed64(key_ptr + key_length - 8);

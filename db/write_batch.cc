@@ -1884,6 +1884,10 @@ class MemTableInserter : public WriteBatch::Handler {
                    hint_per_batch_ ? &GetHintMap()[mem] : nullptr);
     } else if (moptions->inplace_callback == nullptr) {
       assert(!concurrent_memtable_writes_);
+      // Update执行成功的需要的条件:
+      // 1. 在memtable里面找到一个等于或者大于（但却是最靠近key的）的key的node
+      // 2. 并且要更新value的大小必须要小于或等于 node的value的大小。
+      // 否者无法执行replace update
       ret_status = mem->Update(sequence_, key, value, kv_prot_info);
     } else {
       assert(!concurrent_memtable_writes_);
