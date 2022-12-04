@@ -1884,15 +1884,23 @@ class MemTableInserter : public WriteBatch::Handler {
                    hint_per_batch_ ? &GetHintMap()[mem] : nullptr);
     } else if (moptions->inplace_callback == nullptr) {
       assert(!concurrent_memtable_writes_);
-      // Update执行成功的需要的条件:
-      // 1. 在memtable里面找到一个等于或者大于（但却是最靠近key的）的key的node
-      // 2. 并且要更新value的大小必须要小于或等于 node的value的大小。
-      // 否者无法执行replace update
+      // Replace Update执行的流程:
+      // 1. 在调表里面通过seek函数寻找一个等于或者大于且最接近update_key的一个entry
+      //  1.1 找到后，再判断entry的key是否与update_key一致
+      //    1.1.1 如果一致，再判断现有entry中原value占用的空间是否可以装得下 update_value
+      //      1.1.1.1 如果装得下，那就将update_value覆盖进去，同时更新entry的value的长度信息
+      //      1.1.1.2 则用mem->Add插入一个新结点
+      //    1.1.2 如果不一致，则用mem->Add插入一个新结点
+      //  1.2 如果找不到，则用mem->Add插入一个新结点
       ret_status = mem->Update(sequence_, key, value, kv_prot_info);
     } else {
       assert(!concurrent_memtable_writes_);
+      // todo  没太理解这个UpdateCallback函数的意义, 既然最终结果都会update或者add 数据进入
+      // todo 到mem table，为什么还要再尝试从sst里面获取旧的value，增加可能的io开销，最终的结果
+      // todo 却和普通的Update一致?
       ret_status = mem->UpdateCallback(sequence_, key, value, kv_prot_info);
       if (ret_status.IsNotFound()) {
+        // 如果发现找不到entry，就往sst里面找，如果找得到就更新进去，找不到就插入一个新的
         // key not found in memtable. Do sst get, update, add
         SnapshotImpl read_from_snapshot;
         read_from_snapshot.number_ = sequence_;
@@ -1975,6 +1983,7 @@ class MemTableInserter : public WriteBatch::Handler {
       MaybeAdvanceSeq(kBatchBoundary);
     } else if (ret_status.ok()) {
       MaybeAdvanceSeq();
+      // 检查column family data 是否已经满了，判断是否要刷到immutable table 或者 sst里面
       CheckMemtableFull();
     }
     // optimize for non-recovery mode

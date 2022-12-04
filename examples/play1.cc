@@ -37,7 +37,7 @@ int main() {
   a.a = 1;
   a.b = 1;
   printf("a: %d, b: %d\n", a.a, a.b);
-  printf("%lu\n", std::numeric_limits<uint64_t>::max());
+  printf("%llu\n", std::numeric_limits<uint64_t>::max());
   printf("%u\n", std::numeric_limits<uint32_t>::max());
 }
 

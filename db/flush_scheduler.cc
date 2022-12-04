@@ -14,6 +14,7 @@ namespace ROCKSDB_NAMESPACE {
 void FlushScheduler::ScheduleWork(ColumnFamilyData* cfd) {
 #ifndef NDEBUG
   {
+    // 先加一个flusher的全局锁
     std::lock_guard<std::mutex> lock(checking_mutex_);
     assert(checking_set_.count(cfd) == 0);
     checking_set_.insert(cfd);
