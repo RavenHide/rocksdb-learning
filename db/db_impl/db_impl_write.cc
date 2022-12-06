@@ -310,9 +310,11 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     }
 
     if (write_thread_.CompleteParallelMemTableWriter(&w)) {
+      // 完成write group 中所有的writer任务之后才进入到这段逻辑里面
       // we're responsible for exit batch group
       // TODO(myabandeh): propagate status to write_group
       auto last_sequence = w.write_group->last_sequence;
+      // 获取write_group 所有writer 并执行 post_memtable_callback
       for (auto* tmp_w : *(w.write_group)) {
         assert(tmp_w);
         if (tmp_w->post_memtable_callback) {
@@ -323,6 +325,8 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
           assert(tmp_s.ok());
         }
       }
+      // 是否可以理解为 rocksdb的写入是一个write_group 接 一个write_group串行写入的
+      // 而同属一个write_group的writer即可并行写入，也可以串行写
       versions_->SetLastSequence(last_sequence);
       MemTableInsertStatusCheck(w.status);
       write_thread_.ExitAsBatchGroupFollower(&w);

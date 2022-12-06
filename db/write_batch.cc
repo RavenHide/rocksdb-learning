@@ -1982,6 +1982,8 @@ class MemTableInserter : public WriteBatch::Handler {
       const bool kBatchBoundary = true;
       MaybeAdvanceSeq(kBatchBoundary);
     } else if (ret_status.ok()) {
+      // batch 可以由一个个key构成，也可以有多个batch构成，这是判断是每一个key 更新就+1 一次呢，还是
+      // 每个batch执行就+1 一次
       MaybeAdvanceSeq();
       // 检查column family data 是否已经满了，判断是否要刷到immutable table 或者 sst里面
       CheckMemtableFull();

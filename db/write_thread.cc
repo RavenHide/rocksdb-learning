@@ -688,6 +688,8 @@ void WriteThread::ExitAsBatchGroupLeader(WriteGroup& write_group,
     if (!has_dummy) {
       // We find at least one pending writer when we insert dummy. We search
       // for next leader from there.
+      // pipelined_write模式下write group的writer链表结构如下：
+      // xx -> dummy -> last_writer -> Wn -> Wn-1 -> .. -> leader
       next_leader = FindNextLeader(expected, last_writer);
       assert(next_leader != nullptr && next_leader != last_writer);
     }
@@ -698,6 +700,8 @@ void WriteThread::ExitAsBatchGroupLeader(WriteGroup& write_group,
     // next leader or set newest_writer_ to null, otherwise the next leader
     // can run ahead of us and link to memtable writer queue before we do.
     if (write_group.size > 0) {
+      // 清除 write_group链表的link_newer方向，只保留 link_older方向，同时使 leader的
+      // link_older 指向 newest_memtable_writer-
       if (LinkGroup(write_group, &newest_memtable_writer_)) {
         // The leader can now be different from current writer.
         SetState(write_group.leader, STATE_MEMTABLE_WRITER_LEADER);
