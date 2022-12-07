@@ -223,6 +223,7 @@ void WriteThread::SetState(Writer* w, uint8_t new_state) {
     std::lock_guard<std::mutex> guard(w->StateMutex());
     assert(w->state.load(std::memory_order_relaxed) != new_state);
     w->state.store(new_state, std::memory_order_relaxed);
+    // 唤醒 正在BlockingAwait的writer
     w->StateCV().notify_one();
   }
 }
@@ -699,9 +700,15 @@ void WriteThread::ExitAsBatchGroupLeader(WriteGroup& write_group,
     // We have to link our group to memtable writer queue before wake up the
     // next leader or set newest_writer_ to null, otherwise the next leader
     // can run ahead of us and link to memtable writer queue before we do.
+    // 如果write_group执行完上面的 CompleteFollower and CompleteLeader后，突然有新的writer
+    // 进入到 write_group, 这里就将新写入的writer 移动到 leader的link_oldest, 同时用
+    // write_group 的 last_writer 写入 newest_memtable_writer_ 里面
     if (write_group.size > 0) {
       // 清除 write_group链表的link_newer方向，只保留 link_older方向，同时使 leader的
       // link_older 指向 newest_memtable_writer-
+      // 个人觉得 newest_memtable_writer_ 指的是上一个 writer_group 的 last_writer
+      // 这里需要将当前的 writer_group的leader 与 上一个  writer_group 的 last_writer
+      // 给连接起来，保证写入的顺序性
       if (LinkGroup(write_group, &newest_memtable_writer_)) {
         // The leader can now be different from current writer.
         SetState(write_group.leader, STATE_MEMTABLE_WRITER_LEADER);
@@ -733,6 +740,9 @@ void WriteThread::ExitAsBatchGroupLeader(WriteGroup& write_group,
     Writer* head = newest_writer_.load(std::memory_order_acquire);
     if (head != last_writer ||
         !newest_writer_.compare_exchange_strong(head, nullptr)) {
+      // 如果发现 last_writer 已经不是write_group 最新写入的节点，即 last_writer前面已经有新插入的
+      // 节点了，这里就要将最靠近 last_writer的新节点选为新的leader节点
+
       // Either w wasn't the head during the load(), or it was the head
       // during the load() but somebody else pushed onto the list before
       // we did the compare_exchange_strong (causing it to fail).  In the
@@ -749,6 +759,7 @@ void WriteThread::ExitAsBatchGroupLeader(WriteGroup& write_group,
       // could cause the next leader to start their work without a call
       // to MarkJoined, so we can definitely conclude that no other leader
       // work is going on here (with or without db mutex).
+      // 从head开始一直遍历到leader节点，将 link_newer方向的链表给构建起来
       CreateMissingNewerLinks(head);
       assert(last_writer->link_newer->link_older == last_writer);
       last_writer->link_newer->link_older = nullptr;
@@ -762,6 +773,7 @@ void WriteThread::ExitAsBatchGroupLeader(WriteGroup& write_group,
     // else nobody else was waiting, although there might already be a new
     // leader now
 
+    // 将last_writer 到 leader间的全部节点都标记为已完成
     while (last_writer != leader) {
       assert(last_writer);
       last_writer->status = status;
