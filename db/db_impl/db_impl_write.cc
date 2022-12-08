@@ -329,6 +329,9 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       // 而同属一个write_group的writer即可并行写入，也可以串行写
       versions_->SetLastSequence(last_sequence);
       MemTableInsertStatusCheck(w.status);
+      // 将 writer_group的writer全部设置为 已完成，如果有new writer进来，选取离 last_writer
+      // 最近的writer作为leader
+      // 此时的writer的status变为 Status_Completed
       write_thread_.ExitAsBatchGroupFollower(&w);
     }
     assert(w.state == WriteThread::STATE_COMPLETED);
