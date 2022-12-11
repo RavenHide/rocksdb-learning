@@ -128,6 +128,7 @@ int cloexec_flags(int flags, const EnvOptions* options) {
   // If the system supports opening the file with cloexec enabled,
   // do so, as this avoids a race condition if a db is opened around
   // the same time that a child process is forked
+  // 一旦文件的open被用O_CLOEXEC标记时，在子进程执行exec系统调用时，该文件的描述符就会被关闭
 #ifdef O_CLOEXEC
   if (options == nullptr || options->set_fd_cloexec) {
     flags |= O_CLOEXEC;

@@ -773,7 +773,7 @@ void WriteThread::ExitAsBatchGroupLeader(WriteGroup& write_group,
     // else nobody else was waiting, although there might already be a new
     // leader now
 
-    // 将last_writer 到 leader间的全部节点都标记为已完成
+    // 将last_writer 到 leader之前的全部节点都标记为已完成
     while (last_writer != leader) {
       assert(last_writer);
       last_writer->status = status;
@@ -823,6 +823,10 @@ void WriteThread::WaitForMemTableWriters() {
     return;
   }
   Writer w;
+  // 将一个 writer 指向最新的 newest_memtable_writer_, 这里的 newest_memtable_writer
+  // 会存在两种可能
+  // 1. 刚好writer_group已经执行完且没有新的writer插入, 这个时候 LinkOne会返回true
+  // 2. 在writer_group执行完后，又有新的writer插入，这时会LinkOne会返回 false
   if (!LinkOne(&w, &newest_memtable_writer_)) {
     AwaitState(&w, STATE_MEMTABLE_WRITER_LEADER, &wfmw_ctx);
   }

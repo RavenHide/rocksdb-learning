@@ -1866,6 +1866,7 @@ class DBImpl : public DB {
       const autovector<const uint64_t*>& flush_memtable_ids,
       bool resuming_from_bg_err);
 
+  // 等待writer 完成写入（1.memtable写入 2. wal写入）
   inline void WaitForPendingWrites() {
     mutex_.AssertHeld();
     TEST_SYNC_POINT("DBImpl::WaitForPendingWrites:BeforeBlock");

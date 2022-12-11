@@ -14,6 +14,7 @@
 
 namespace ROCKSDB_NAMESPACE {
 
+// 打开一个文件，并决定这个文件是directIO还是Mmap还是以FileSystem的方式来写入
 IOStatus NewWritableFile(FileSystem* fs, const std::string& fname,
                          std::unique_ptr<FSWritableFile>* result,
                          const FileOptions& options) {

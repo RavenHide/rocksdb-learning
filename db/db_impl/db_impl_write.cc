@@ -329,8 +329,8 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       // 而同属一个write_group的writer即可并行写入，也可以串行写
       versions_->SetLastSequence(last_sequence);
       MemTableInsertStatusCheck(w.status);
-      // 将 writer_group的writer全部设置为 已完成，如果有new writer进来，选取离 last_writer
-      // 最近的writer作为leader
+      // 将 writer_group除leader之外的writer全部设置为 已完成，如果有new writer进来，
+      // 选取距离 last_writer 最近的writer作为leader
       // 此时的writer的status变为 Status_Completed
       write_thread_.ExitAsBatchGroupFollower(&w);
     }
@@ -338,6 +338,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     // STATE_COMPLETED conditional below handles exit
   }
   if (w.state == WriteThread::STATE_COMPLETED) {
+    // 非leader的writer结点将会在这里结束
     if (log_used != nullptr) {
       *log_used = w.log_used;
     }
@@ -1542,6 +1543,9 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
 
   auto oldest_alive_log = alive_log_files_.begin()->number;
   bool flush_wont_release_oldest_log = false;
+  // 2pc模式下，需要等待 commit的命名才能flush，若oldest_alive_log 包含 未提交的准备entries
+  // 说明有事务在执行且事务提交。
+  // 这个时候除了等待事务完成才能flush之外，别无他法
   if (allow_2pc()) {
     auto oldest_log_with_uncommitted_prep =
         logs_with_prep_tracker_.FindMinLogContainingOutstandingPrep();
@@ -1592,10 +1596,14 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
         cfds.push_back(cfd);
       }
     }
+    // 是否要将 statsColumnFamily 也进行wal的刷盘, 这里有两种情况会进行statsCF wal的刷盘
+    // 1. statsCFData 已经被包含在 cfds 里面了
+    // 2. statsCFData 没有被包含在 cfds里，但它的logNumber要比 cfds里的所有元素都小
     MaybeFlushStatsCF(&cfds);
   }
   WriteThread::Writer nonmem_w;
   if (two_write_queues_) {
+    // 等待当前的write group完成，并由 nonmem_w成为新一轮write group的leader
     nonmem_write_thread_.EnterUnbatched(&nonmem_w, &mutex_);
   }
 
@@ -2199,6 +2207,13 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   return s;
 }
 
+// 猜测将WAL日志刷盘时，会涉及到mutable memtable 和 immutable memtable 的wal缓冲
+// 所以这里需要从
+// writer_buffer_size
+// mutable_db_options_.max_total_wal_size
+// immutable_db_options_.db_write_buffer_size
+// immutable_db_options_.writer_buffer_manager->buffer_size
+// 这四项配置中选取一个最小值，这样才能够同时满足 mutable memtable 和 immutable memtable
 size_t DBImpl::GetWalPreallocateBlockSize(uint64_t write_buffer_size) const {
   mutex_.AssertHeld();
   size_t bsize =
