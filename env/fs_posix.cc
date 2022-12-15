@@ -297,6 +297,9 @@ class PosixFileSystem : public FileSystem {
     int flags = (reopen) ? (O_CREAT | O_APPEND) : (O_CREAT | O_TRUNC);
     // Direct IO mode with O_DIRECT flag or F_NOCAHCE (MAC OSX)
     if (options.use_direct_writes && !options.use_mmap_writes) {
+      // pwrite() 是指顺序执行lseek到指定offset，然后将数据写入到文件
+      // 这里说的是以O_APPEND模式来执行pwrite时，无论offset是多少，linux最终都会以
+      // 追加的形式写入到文件尾部
       // Note: we should avoid O_APPEND here due to ta the following bug:
       // POSIX requires that opening a file with the O_APPEND flag should
       // have no affect on the location at which pwrite() writes data.
@@ -331,12 +334,14 @@ class PosixFileSystem : public FileSystem {
       s = IOError("While open a file for appending", fname, errno);
       return s;
     }
+    // 给文件添加标记位，包括 O_CLOEXEC
     SetFD_CLOEXEC(fd, &options);
 
     if (options.use_mmap_writes) {
       MaybeForceDisableMmap(fd);
     }
     if (options.use_mmap_writes && !forceMmapOff_) {
+      // 开启并支持 Mmap ，就以Mamp的方式打开文件
       result->reset(new PosixMmapFile(fname, fd, page_size_, options));
     } else if (options.use_direct_writes && !options.use_mmap_writes) {
 #ifdef OS_MACOSX

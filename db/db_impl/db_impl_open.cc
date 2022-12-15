@@ -1705,6 +1705,7 @@ IOStatus DBImpl::CreateWAL(uint64_t log_file_num, uint64_t recycle_log_number,
     io_s = fs_->ReuseWritableFile(log_fname, old_log_fname, opt_file_options,
                                   &lfile, /*dbg=*/nullptr);
   } else {
+    // 打开一个文件，并确定是以 directIo、Mmap还是FileSystem方式打开文件
     io_s = NewWritableFile(fs_.get(), log_fname, &lfile, opt_file_options);
   }
 

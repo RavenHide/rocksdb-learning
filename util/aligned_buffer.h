@@ -30,6 +30,7 @@ inline size_t TruncateToPageBoundary(size_t page_size, size_t s) {
 // Example:
 //   Roundup(13, 5)   => 15
 //   Roundup(201, 16) => 208
+// 把 x 变为 y的整数倍，其中倍数为：  (x / y ) 向上取整
 inline size_t Roundup(size_t x, size_t y) {
   return ((x + y - 1) / y) * y;
 }

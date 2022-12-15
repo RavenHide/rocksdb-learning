@@ -1129,6 +1129,7 @@ Status DBImpl::PreprocessWrite(const WriteOptions& write_options,
 
   PERF_TIMER_GUARD(write_scheduling_flushes_compactions_time);
 
+  // 如果当前的日志大小超出了最大的walSize
   if (UNLIKELY(status.ok() && total_log_size_ > GetMaxTotalWalSize())) {
     assert(versions_);
     const ColumnFamilySet* const column_families =
@@ -1586,6 +1587,10 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
   // happen while we're in the write thread
   autovector<ColumnFamilyData*> cfds;
   if (immutable_db_options_.atomic_flush) {
+    // 以下几种情况的column family data 会被加入到 cfds
+    // 1. immutable memtable还有未刷盘的数据
+    // 2. mutable memtable 还有数据
+    // 3. cached_recoverable_state_empty_ 不为空
     SelectColumnFamiliesForAtomicFlush(&cfds);
   } else {
     for (auto cfd : *versions_->GetColumnFamilySet()) {
@@ -1607,6 +1612,8 @@ Status DBImpl::SwitchWAL(WriteContext* write_context) {
     nonmem_write_thread_.EnterUnbatched(&nonmem_w, &mutex_);
   }
 
+  // 确定哪些 column family data 需要进行Flush之后，
+  // 需要重新建一个新的 mutable memtable 给entry写入
   for (const auto cfd : cfds) {
     cfd->Ref();
     status = SwitchMemtable(cfd, write_context);
@@ -2023,6 +2030,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   if (two_write_queues_) {
     log_write_mutex_.Lock();
   }
+  // 如果当前的log file还有数据，就需要建立一个新的log file
   bool creating_new_log = !log_empty_;
   if (two_write_queues_) {
     log_write_mutex_.Unlock();
@@ -2030,6 +2038,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   uint64_t recycle_log_number = 0;
   if (creating_new_log && immutable_db_options_.recycle_log_file_num &&
       !log_recycle_files_.empty()) {
+    // 是否有可以复用的文件描述符
     recycle_log_number = log_recycle_files_.front();
   }
   uint64_t new_log_number =

@@ -718,6 +718,7 @@ IOStatus WritableFileWriter::WriteDirect(
   assert((next_write_offset_ % alignment) == 0);
 
   // Calculate whole page final file advance if all writes succeed
+  // 将buf大小转为 alignment的整数倍, file_advance <= buf_.CurrentSize()
   const size_t file_advance =
       TruncateToPageBoundary(alignment, buf_.CurrentSize());
 
@@ -727,6 +728,7 @@ IOStatus WritableFileWriter::WriteDirect(
   const size_t leftover_tail = buf_.CurrentSize() - file_advance;
 
   // Round up and pad
+  // 将buf 进行内存对齐，多余为了对齐而增加的内存段，以0进行填充
   buf_.PadToAlignmentWith(0);
 
   const char* src = buf_.BufferStart();
@@ -743,8 +745,10 @@ IOStatus WritableFileWriter::WriteDirect(
   while (left > 0) {
     // Check how much is allowed
     size_t size = left;
+
     if (rate_limiter_ != nullptr &&
         rate_limiter_priority_used != Env::IO_TOTAL) {
+      // 尝试进行速率限制
       size = rate_limiter_->RequestToken(left, buf_.Alignment(),
                                          rate_limiter_priority_used, stats_,
                                          RateLimiter::OpType::kWrite);
@@ -795,6 +799,7 @@ IOStatus WritableFileWriter::WriteDirect(
     // Move the tail to the beginning of the buffer
     // This never happens during normal Append but rather during
     // explicit call to Flush()/Sync() or Close()
+    // 写完 file_advance部分后，将buf指针移动到 leftover_tail
     buf_.RefitTail(file_advance, leftover_tail);
     // This is where we start writing next time which may or not be
     // the actual file size on disk. They match if the buffer size

@@ -160,6 +160,7 @@ IOStatus Writer::AddCompressionTypeRecord() {
     return IOStatus::OK();
   }
 
+  // 日志增加文件头, 包含压缩信息
   CompressionTypeRecord record(compression_type_);
   std::string encode;
   record.EncodeTo(&encode);
@@ -195,11 +196,14 @@ IOStatus Writer::EmitPhysicalRecord(RecordType t, const char* ptr, size_t n,
   assert(n <= 0xffff);  // Must fit in two bytes
 
   size_t header_size;
+
   char buf[kRecyclableHeaderSize];
 
   // Format the header
+  // 写入 length 2bytes
   buf[4] = static_cast<char>(n & 0xff);
   buf[5] = static_cast<char>(n >> 8);
+  // 写入 type 1byte
   buf[6] = static_cast<char>(t);
 
   uint32_t crc = type_crc_[t];

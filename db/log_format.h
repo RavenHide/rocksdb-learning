@@ -41,10 +41,22 @@ static const int kMaxRecordType = kSetCompressionType;
 static const unsigned int kBlockSize = 32768;
 
 // Header is checksum (4 bytes), length (2 bytes), type (1 byte)
+/* ------------------------------------------
+ * |     4 bytes     |   2 bytes  | 1 byte |
+ * |----------------------------------------
+ * |   checksum     |    length  |    type |
+ * -----------------------------------------
+ */
 static const int kHeaderSize = 4 + 2 + 1;
 
 // Recyclable header is checksum (4 bytes), length (2 bytes), type (1 byte),
 // log number (4 bytes).
+/* ----------------------------------------------------------
+ * |     4 bytes     |   2 bytes  | 1 byte |     4 bytes    |
+ * |--------------------------------------------------------|
+ * |   checksum     |    length  |    type |    log number  |
+ * -----------------------------------------------------------
+ */
 static const int kRecyclableHeaderSize = 4 + 2 + 1 + 4;
 
 }  // namespace log
