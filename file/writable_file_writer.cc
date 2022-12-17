@@ -794,7 +794,15 @@ IOStatus WritableFileWriter::WriteDirect(
     flushed_size_.store(cur_size + size, std::memory_order_release);
     assert((next_write_offset_ % alignment) == 0);
   }
-
+  // DirectIO 需要保证每次写入都是 4096 的倍数，而上面的处理对于不满4096 bytes的剩余部分
+  // 通过填充0来使其达到4096的大小。
+  // 而这里的处理则是使写入的offset回到 file_advance，意味着下一次写入，leftover_tail的部分
+  // 又会重新多重复写一回。可能看到这里会觉得很奇怪，但是必须要要这样处理才能保证文件的紧凑
+  // 不然的话，如果每次写入都从left对应的offset开始，会发现随着写入次数的增加，
+  // 文件上会有越来越多的部分存在许多以0填充的空洞。
+  // 因此才需要每次写完后，将offset回到file_advance 的位置，使得下次的写入offset继续从
+  // file_advance的位置开始，即为了使得文件数据能够紧凑，会使得每次写入时，尾部不足4096 bytes大小的
+  // 数据，在第二次写入时，重复的多写一次.
   if (s.ok()) {
     // Move the tail to the beginning of the buffer
     // This never happens during normal Append but rather during
