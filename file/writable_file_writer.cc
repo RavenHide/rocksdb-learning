@@ -344,6 +344,8 @@ IOStatus WritableFileWriter::Flush(Env::IOPriority op_rate_limiter_priority) {
     io_options.rate_limiter_priority =
         WritableFileWriter::DecideRateLimiterPriority(
             writable_file_->GetIOPriority(), op_rate_limiter_priority);
+    // 由于 PosixWritableFile 和 PosixMmapFile 在执行上面的 WriteBuffered 或 WriteDirectIO已经
+    // 通过system call将数据写入磁盘或 os cache里，这里Flush将什么也不会做，而是直接返回成功。
     s = writable_file_->Flush(io_options, nullptr);
 #ifndef ROCKSDB_LITE
     if (ShouldNotifyListeners()) {

@@ -1434,6 +1434,7 @@ IOStatus PosixWritableFile::Flush(const IOOptions& /*opts*/,
 IOStatus PosixWritableFile::Sync(const IOOptions& /*opts*/,
                                  IODebugContext* /*dbg*/) {
 #ifdef HAVE_FULLFSYNC
+  // macos 才会有这个 F_FULLFSYNC 这个标记位，将所有 os cache刷盘
   if (::fcntl(fd_, F_FULLFSYNC) < 0) {
     return IOError("while fcntl(F_FULLFSYNC)", filename_, errno);
   }
@@ -1529,6 +1530,7 @@ IOStatus PosixWritableFile::Allocate(uint64_t offset, uint64_t len,
 IOStatus PosixWritableFile::RangeSync(uint64_t offset, uint64_t nbytes,
                                       const IOOptions& opts,
                                       IODebugContext* dbg) {
+  // 这个只有linux 2.6.17以上内核才支持 范围os cache刷盘
 #ifdef ROCKSDB_RANGESYNC_PRESENT
   assert(offset <= static_cast<uint64_t>(std::numeric_limits<off_t>::max()));
   assert(nbytes <= static_cast<uint64_t>(std::numeric_limits<off_t>::max()));

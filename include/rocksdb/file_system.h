@@ -1116,6 +1116,9 @@ class FSWritableFile {
   virtual IOStatus RangeSync(uint64_t /*offset*/, uint64_t /*nbytes*/,
                              const IOOptions& options, IODebugContext* dbg) {
     if (strict_bytes_per_sync_) {
+      // 将所有os cache都刷盘，如果 FSWritableFile的实现类不支持RangeSync的话,就会fallback
+      // 回当前函数，然后再根据strict_bytes_per_sync_ 这个参数决定是否要将所有os cache进行
+      // 刷盘
       return Sync(options, dbg);
     }
     return IOStatus::OK();
