@@ -706,7 +706,9 @@ bool ColumnFamilyData::UnrefAndTryDelete() {
     delete this;
     return true;
   }
-
+  // columnFamilyData 当初始化时，会将refs 加 1，也就是说自己持有自己，
+  // 如果这里如果 old_refs == 2，就只会有 columnFamilyData自身和superVersion 只有
+  // 其引用。
   if (old_refs == 2 && super_version_ != nullptr) {
     // Only the super_version_ holds me
     SuperVersion* sv = super_version_;
@@ -1292,9 +1294,11 @@ void ColumnFamilyData::InstallSuperVersion(
 void ColumnFamilyData::InstallSuperVersion(
     SuperVersionContext* sv_context,
     const MutableCFOptions& mutable_cf_options) {
+  // 初始化新的 superVersion
   SuperVersion* new_superversion = sv_context->new_superversion.release();
   new_superversion->mutable_cf_options = mutable_cf_options;
   new_superversion->Init(this, mem_, imm_.current(), current_);
+
   SuperVersion* old_superversion = super_version_;
   super_version_ = new_superversion;
   ++super_version_number_;
@@ -1302,11 +1306,13 @@ void ColumnFamilyData::InstallSuperVersion(
   super_version_->write_stall_condition =
       RecalculateWriteStallConditions(mutable_cf_options);
 
+  // 清理旧的 superVersion
   if (old_superversion != nullptr) {
     // Reset SuperVersions cached in thread local storage.
     // This should be done before old_superversion->Unref(). That's to ensure
     // that local_sv_ never holds the last reference to SuperVersion, since
     // it has no means to safely do SuperVersion cleanup.
+    // 取出当前线程里的存储superversion，并将没有使用的superversion的引用计数器减1
     ResetThreadLocalSuperVersions();
 
     if (old_superversion->mutable_cf_options.write_buffer_size !=

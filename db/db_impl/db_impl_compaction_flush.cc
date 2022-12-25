@@ -3723,6 +3723,7 @@ void DBImpl::InstallSuperVersionAndScheduleWork(
   if (UNLIKELY(sv_context->new_superversion == nullptr)) {
     sv_context->NewSuperVersion();
   }
+  // new一个新的superversion， 同时将旧的superversion进行清理
   cfd->InstallSuperVersion(sv_context, mutable_cf_options);
 
   // There may be a small data race here. The snapshot tricking bottommost
