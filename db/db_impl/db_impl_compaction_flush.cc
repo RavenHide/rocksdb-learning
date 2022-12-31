@@ -365,6 +365,7 @@ Status DBImpl::FlushMemTablesToOutputFiles(
   std::vector<SequenceNumber> snapshot_seqs;
   SequenceNumber earliest_write_conflict_snapshot;
   SnapshotChecker* snapshot_checker;
+  // 获取当前所有的 snapshot_seqs, earliest_write_conflict_snapshot，以及snapshot_checker
   GetSnapshotContext(job_context, &snapshot_seqs,
                      &earliest_write_conflict_snapshot, &snapshot_checker);
   const auto& bg_flush_arg = bg_flush_args[0];
@@ -2769,6 +2770,8 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
   autovector<ColumnFamilyData*> column_families_not_to_flush;
   while (!flush_queue_.empty()) {
     // This cfd is already referenced
+    // 除了开启 atomic_flush功能下，flush_req里的column_famliy_data才存在多个的情况
+    // 否则虽然是以数组声明，但实际上只会有一个 column_family_data
     const FlushRequest& flush_req = PopFirstFromFlushQueue();
     superversion_contexts.clear();
     superversion_contexts.reserve(flush_req.size());

@@ -6,6 +6,7 @@
 #include <utility>
 #include "limits"
 #include "stdint.h"
+#include "list"
 
 class A {
  public:
@@ -39,7 +40,13 @@ int main() {
   printf("a: %d, b: %d\n", a.a, a.b);
   printf("%llu\n", std::numeric_limits<uint64_t>::max());
   printf("%u\n", std::numeric_limits<uint32_t>::max());
-  uint32 a[8];
 
+  std::list<uint64_t> l{1, 2, 3, 4, 5, 6};
+  std::list<uint64_t>::iterator i = l.end();
+  --i;
+  l.erase(i);
+  for (auto e : l) {
+    printf("elem: %llu\n", e);
+  }
 }
 
