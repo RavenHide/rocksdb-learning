@@ -180,6 +180,7 @@ void FlushJob::PickMemTable() {
   uint64_t max_next_log_number = 0;
 
   // Save the contents of the earliest memtable as a new Table
+  // 找出所有未flush到sst 且 memtable id <= max_memtable_id_ 的imutable memtable
   cfd_->imm()->PickMemtablesToFlush(max_memtable_id_, &mems_,
                                     &max_next_log_number);
   if (mems_.empty()) {
@@ -202,6 +203,7 @@ void FlushJob::PickMemTable() {
   // path 0 for level 0 file.
   meta_.fd = FileDescriptor(versions_->NewFileNumber(), 0, 0);
 
+  // flush job 引用 column family data 的version
   base_ = cfd_->current();
   base_->Ref();  // it is likely that we do not need this reference
 }

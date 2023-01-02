@@ -133,8 +133,11 @@ IOStatus DBImpl::SyncClosedLogs(JobContext* job_context) {
     // "number <= current_log_number - 1" is equivalent to
     // "number < current_log_number".
     if (io_s.ok()) {
+      // 将已经成功刷盘并且close的wal log从 logs_ 里面移除，并放入回收队列 logs_to_free_
+      // 等待相关memtable 落入sst之后，就可以将其删除掉
       io_s = status_to_io_status(MarkLogsSynced(current_log_number - 1, true));
     } else {
+      // sync失败，重置getting_synced 为 false
       MarkLogsNotSynced(current_log_number - 1);
     }
     if (!io_s.ok()) {
@@ -221,6 +224,7 @@ Status DBImpl::FlushMemTableToOutputFile(
   IOStatus log_io_s = IOStatus::OK();
   if (needs_to_sync_closed_wals) {
     // SyncClosedLogs() may unlock and re-lock the db_mutex.
+    // 将当前最近一段时间内未刷盘的wal日志（不包含最新写入那条记录）
     log_io_s = SyncClosedLogs(job_context);
     if (!log_io_s.ok() && !log_io_s.IsShutdownInProgress() &&
         !log_io_s.IsColumnFamilyDropped()) {

@@ -353,6 +353,7 @@ void MemTableList::PickMemtablesToFlush(uint64_t max_memtable_id,
   // IDs will be added to the memlist.
   for (auto it = memlist.rbegin(); it != memlist.rend(); ++it) {
     MemTable* m = *it;
+    // 开了 atomic_flush 的memtable, 它的 atomic_flush_seqno 就会不再等于 kMaxSequenceNumber
     if (!atomic_flush && m->atomic_flush_seqno_ != kMaxSequenceNumber) {
       atomic_flush = true;
     }

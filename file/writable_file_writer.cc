@@ -250,6 +250,8 @@ IOStatus WritableFileWriter::Close() {
           start_ts = FileOperationInfo::StartNow();
         }
 #endif
+        // 这里的fsync个人觉得更多的是想更新文件 meta 数据，上面已经执行truncate了，这里
+        // 需要保证meta数据可以及时刷盘
         interim = writable_file_->Fsync(io_options, nullptr);
 #ifndef ROCKSDB_LITE
         if (ShouldNotifyListeners()) {
@@ -411,11 +413,14 @@ const char* WritableFileWriter::GetFileChecksumFuncName() const {
 }
 
 IOStatus WritableFileWriter::Sync(bool use_fsync) {
+  // direct io 执行Flush 就会直接将数据刷盘
+  // 其它的模式只会将数据刷到 os cache
   IOStatus s = Flush();
   if (!s.ok()) {
     return s;
   }
   TEST_KILL_RANDOM("WritableFileWriter::Sync:0");
+  // 非 direct io 在这里执行数据刷盘
   if (!use_direct_io() && pending_sync_) {
     s = SyncInternal(use_fsync);
     if (!s.ok()) {
