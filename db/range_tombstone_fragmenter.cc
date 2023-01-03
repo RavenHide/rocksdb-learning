@@ -414,6 +414,7 @@ bool FragmentedRangeTombstoneIterator::Valid() const {
 
 SequenceNumber FragmentedRangeTombstoneIterator::MaxCoveringTombstoneSeqnum(
     const Slice& target_user_key) {
+  // 找到第一个大于或等于target_user_key 的位置
   SeekToCoveringTombstone(target_user_key);
   return ValidPos() && ucmp_->Compare(start_key(), target_user_key) <= 0 ? seq()
                                                                          : 0;

@@ -363,6 +363,7 @@ void ThreadPoolImpl::Impl::Submit(std::function<void()>&& schedule,
     return;
   }
 
+  // 创建线程并启动，同时将线程池填满
   StartBGThreads();
 
   // Add to priority queue

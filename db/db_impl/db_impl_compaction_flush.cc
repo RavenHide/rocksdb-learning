@@ -2433,6 +2433,7 @@ void DBImpl::EnableManualCompaction() {
   manual_compaction_paused_.fetch_sub(1, std::memory_order_release);
 }
 
+// 将flush任务和compaction任务尽可能地放入任务队列，由后台线程去执行相关任务
 void DBImpl::MaybeScheduleFlushOrCompaction() {
   mutex_.AssertHeld();
   if (!opened_successfully_) {
@@ -2455,6 +2456,7 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
   auto bg_job_limits = GetBGJobLimits();
   bool is_flush_pool_empty =
       env_->GetBackgroundThreads(Env::Priority::HIGH) == 0;
+  // 尽可能地将flush任务都放入任务队列
   while (!is_flush_pool_empty && unscheduled_flushes_ > 0 &&
          bg_flush_scheduled_ < bg_job_limits.max_flushes) {
     bg_flush_scheduled_++;
@@ -2485,6 +2487,7 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
     }
   }
 
+  // 上面完成了 flush任务的调度, 下面将尝试进行Compaction任务的调度
   if (bg_compaction_paused_ > 0) {
     // we paused the background compaction
     return;

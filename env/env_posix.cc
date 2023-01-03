@@ -425,6 +425,7 @@ PosixEnv::PosixEnv()
 void PosixEnv::Schedule(void (*function)(void* arg1), void* arg, Priority pri,
                         void* tag, void (*unschedFunction)(void* arg)) {
   assert(pri >= Priority::BOTTOM && pri <= Priority::HIGH);
+  // 将执行函数单纯地放入到任务队列，然后唤醒线程池的工作线程来去任务队列里面消费任务
   thread_pools_[pri].Schedule(function, arg, tag, unschedFunction);
 }
 

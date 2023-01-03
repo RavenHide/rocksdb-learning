@@ -6,7 +6,12 @@
 #include <utility>
 #include "limits"
 #include "stdint.h"
+<<<<<<< Updated upstream
 #include "list"
+=======
+#include "thread"
+#include "pthread.h"
+>>>>>>> Stashed changes
 
 class A {
  public:
@@ -17,29 +22,34 @@ class A {
     printf("create A\n");
   }
   ~A() {
-    a = 0;
-    b = 0;
     printf("destruction A\n");
   }
   int a;
   int b;
 };
 
-A&& Create() {
+A Create() {
 //  A a = A();
 //  a.a = 10;
 //  a.b = 10;
-  return std::move(A(1, 2));
+  auto a = A(1, 2);
+  a.b = 2;
+  return a;
+}
+
+void threadARun(int id) {
+  printf("id: %d\n", id);
 }
 
 int main() {
-  A&& a = Create();
+  A a = Create();
   printf("a: %d, b: %d\n", a.a, a.b);
   a.a = 1;
   a.b = 1;
   printf("a: %d, b: %d\n", a.a, a.b);
   printf("%llu\n", std::numeric_limits<uint64_t>::max());
   printf("%u\n", std::numeric_limits<uint32_t>::max());
+<<<<<<< Updated upstream
 
   std::list<uint64_t> l{1, 2, 3, 4, 5, 6};
   std::list<uint64_t>::iterator i = l.end();
@@ -48,5 +58,14 @@ int main() {
   for (auto e : l) {
     printf("elem: %llu\n", e);
   }
+=======
+//  uint32 a[8];
+
+  A a1 = std::move(a);
+  printf("a: %d, b: %d\n", a1.a, a1.b);
+
+  std::thread t(threadARun, 123);
+  t.join();
+>>>>>>> Stashed changes
 }
 
