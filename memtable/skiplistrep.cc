@@ -193,7 +193,7 @@ public:
     void Seek(const Slice& user_key, const char* memtable_key) override {
       if (memtable_key != nullptr) {
         // 在skiplist 从head开始进行查找，直到找到一个等于key的node或者找到一个比key大
-        // 但skiplist中，距离 key最近的一个node。如果都找不到，就会返回nullptr
+        // 但在 skiplist中，距离 key最近的一个node。如果都找不到，就会返回nullptr
         iter_.Seek(memtable_key);
       } else {
         // 如果只有 user_key，这里会用 EncodeKey来补充一个 user_key_length
