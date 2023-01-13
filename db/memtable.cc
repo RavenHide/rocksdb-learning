@@ -794,9 +794,11 @@ static bool SaveValue(void* arg, const char* entry) {
         } else if (s->value != nullptr) {
           s->value->assign(v.data(), v.size());
         }
+
         if (s->inplace_update_support) {
           s->mem->GetLock(s->key->user_key())->ReadUnlock();
         }
+
         *(s->found_final_value) = true;
         if (s->is_blob_index != nullptr) {
           *(s->is_blob_index) = (type == kTypeBlobIndex);

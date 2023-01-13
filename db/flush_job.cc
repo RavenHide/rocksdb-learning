@@ -379,6 +379,7 @@ Status FlushJob::MemPurge() {
   std::vector<InternalIterator*> memtables;
   std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
       range_del_iters;
+
   for (MemTable* m : mems_) {
     memtables.push_back(m->NewIterator(ro, &arena));
     auto* range_del_iter = m->NewRangeTombstoneIterator(ro, kMaxSequenceNumber);
@@ -401,6 +402,7 @@ Status FlushJob::MemPurge() {
                          : earliest_seqno;
   }
 
+  // 重新封装的一个可以包含多个 Iteration 的 特殊Iteration
   ScopedArenaIterator iter(
       NewMergingIterator(&(cfd_->internal_comparator()), memtables.data(),
                          static_cast<int>(memtables.size()), &arena));
