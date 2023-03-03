@@ -6,12 +6,9 @@
 #include <utility>
 #include "limits"
 #include "stdint.h"
-<<<<<<< Updated upstream
 #include "list"
-=======
 #include "thread"
 #include "pthread.h"
->>>>>>> Stashed changes
 
 class A {
  public:
@@ -49,7 +46,6 @@ int main() {
   printf("a: %d, b: %d\n", a.a, a.b);
   printf("%llu\n", std::numeric_limits<uint64_t>::max());
   printf("%u\n", std::numeric_limits<uint32_t>::max());
-<<<<<<< Updated upstream
 
   std::list<uint64_t> l{1, 2, 3, 4, 5, 6};
   std::list<uint64_t>::iterator i = l.end();
@@ -58,14 +54,11 @@ int main() {
   for (auto e : l) {
     printf("elem: %llu\n", e);
   }
-=======
-//  uint32 a[8];
 
   A a1 = std::move(a);
   printf("a: %d, b: %d\n", a1.a, a1.b);
 
   std::thread t(threadARun, 123);
   t.join();
->>>>>>> Stashed changes
 }
 
