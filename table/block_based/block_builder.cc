@@ -192,6 +192,7 @@ inline void BlockBuilder::AddWithLastKeyImpl(const Slice& key,
     estimate_ += sizeof(uint32_t);
     counter_ = 0;
   } else if (use_delta_encoding_) {
+    // use_delta_encoding_ 默认是 true
     // See how much sharing to do with previous string
     shared = key.difference_offset(last_key);
   }
@@ -199,6 +200,7 @@ inline void BlockBuilder::AddWithLastKeyImpl(const Slice& key,
   const size_t non_shared = key.size() - shared;
 
   if (use_value_delta_encoding_) {
+    // use_value_delta_encoding_ 默认是false
     // Add "<shared><non_shared>" to buffer_
     PutVarint32Varint32(&buffer_, static_cast<uint32_t>(shared),
                         static_cast<uint32_t>(non_shared));

@@ -51,5 +51,30 @@ int main() {
   s = db->Get(ReadOptions(), key, &value);
   std::printf("key: %s, val: %s\n", key.c_str(), value.c_str());
 
+  // single delete test
+  std::string single_delete_key = "single_delete_test";
+  db->Put(rocksdb::WriteOptions(), single_delete_key, "11");
+  db->SingleDelete(rocksdb::WriteOptions(), single_delete_key);
+
+  std::string single_delete_value{};
+  s = db->Get(ReadOptions(), single_delete_key, &single_delete_value);
+  assert(s.IsNotFound());
+  std::printf("status: %s, single_delete: key: %s, val: %s\n",
+              s.ToString().c_str(), single_delete_key.c_str(), single_delete_value.c_str());
+
+  db->Put(rocksdb::WriteOptions(), single_delete_key, "12");
+  db->Put(rocksdb::WriteOptions(), single_delete_key, "13");
+  db->Put(rocksdb::WriteOptions(), single_delete_key, "14");
+  db->Put(rocksdb::WriteOptions(), single_delete_key, "15");
+  s = db->SingleDelete(rocksdb::WriteOptions(), single_delete_key);
+
+  std::printf("single_delete: result: %s, key: %s, val: %s\n",
+              s.ToString().c_str(), single_delete_key.c_str(), single_delete_value.c_str());
+
+  s = db->Get(ReadOptions(), single_delete_key, &single_delete_value);
+//  assert(s.ok());
+  std::printf("status: %s, single_delete: key: %s, val: %s\n",
+              s.ToString().c_str(), single_delete_key.c_str(), single_delete_value.c_str());
+
   delete db;
 }

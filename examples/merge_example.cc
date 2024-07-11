@@ -164,29 +164,29 @@ int main() {
 }
 
 // increase test case
-//int main() {
-//
-//  // open db and merge
-//  rocksdb::DB* db;
-//  rocksdb::Options opt;
-//  opt.create_if_missing = true;
-//  opt.merge_operator.reset(new Uint64AddOperator);
-//  rocksdb::Status s = rocksdb::DB::Open(opt, "storage/merge_example", &db);
-//  if (!s.ok()) {
-//    fprintf(stderr, "failed to open db, status: %s\n", s.ToString().c_str());
-//    assert(false);
-//  }
-//
-//  rocksdb::WriteOptions write_opt;
-//  std::string key = "test_merge";
-//  std::string val = "1";
-//  s = db->Merge(write_opt, key, val);
-//  assert(s.ok());
-//
-// std::string get_val = "";
-//  s = db->Get(rocksdb::ReadOptions(), key, &get_val);
-//  assert(s.ok());
-//  fprintf(stdout, "val: %s\n", get_val.c_str());
-//  delete db;
-//}
+int custom_merge() {
+
+  // open db and merge
+  rocksdb::DB* db;
+  rocksdb::Options opt;
+  opt.create_if_missing = true;
+  opt.merge_operator.reset(new Uint64AddOperator);
+  rocksdb::Status s = rocksdb::DB::Open(opt, "storage/merge_example", &db);
+  if (!s.ok()) {
+    fprintf(stderr, "failed to open db, status: %s\n", s.ToString().c_str());
+    assert(false);
+  }
+
+  rocksdb::WriteOptions write_opt;
+  std::string key = "test_merge";
+  std::string val = "1";
+  s = db->Merge(write_opt, key, val);
+  assert(s.ok());
+
+ std::string get_val = "";
+  s = db->Get(rocksdb::ReadOptions(), key, &get_val);
+  assert(s.ok());
+  fprintf(stdout, "val: %s\n", get_val.c_str());
+  delete db;
+}
 

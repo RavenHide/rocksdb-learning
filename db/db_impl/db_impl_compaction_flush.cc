@@ -239,6 +239,7 @@ Status DBImpl::FlushMemTableToOutputFile(
   // num_flush_not_started_ needs to be rollback.
   TEST_SYNC_POINT("DBImpl::FlushMemTableToOutputFile:BeforePickMemtables");
   if (s.ok()) {
+    // 会把 memTable ID 小于 max_memtable_id，全都取出来进行准备flush
     flush_job.PickMemTable();
     need_cancel = true;
   }
@@ -258,6 +259,7 @@ Status DBImpl::FlushMemTableToOutputFile(
   // and EventListener callback will be called when the db_mutex
   // is unlocked by the current thread.
   if (s.ok()) {
+    // 正常情况下 switched_to_mempurge 是 false
     s = flush_job.Run(&logs_with_prep_tracker_, &file_meta,
                       &switched_to_mempurge);
     need_cancel = false;
@@ -336,6 +338,9 @@ Status DBImpl::FlushMemTableToOutputFile(
     auto sfm = static_cast<SstFileManagerImpl*>(
         immutable_db_options_.sst_file_manager.get());
     if (sfm) {
+      //  默认配置 immutable_db_options_.sst_file_manager = nullptr，
+      //  即 sfm 为空，这里一般不会执行, 可以先忽略这段逻辑
+
       // Notify sst_file_manager that a new file was added
       std::string file_path = MakeTableFileName(
           cfd->ioptions()->cf_paths[0].path, file_meta.fd.GetNumber());
@@ -365,6 +370,7 @@ Status DBImpl::FlushMemTablesToOutputFiles(
     return AtomicFlushMemTablesToOutputFiles(
         bg_flush_args, made_progress, job_context, log_buffer, thread_pri);
   }
+
   assert(bg_flush_args.size() == 1);
   std::vector<SequenceNumber> snapshot_seqs;
   SequenceNumber earliest_write_conflict_snapshot;
@@ -372,6 +378,7 @@ Status DBImpl::FlushMemTablesToOutputFiles(
   // 获取当前所有的 snapshot_seqs, earliest_write_conflict_snapshot，以及snapshot_checker
   GetSnapshotContext(job_context, &snapshot_seqs,
                      &earliest_write_conflict_snapshot, &snapshot_checker);
+  // 因为走到这里的请求，都是默认配置。在默认配置下 bg_flush_args 只有一个cfd
   const auto& bg_flush_arg = bg_flush_args[0];
   ColumnFamilyData* cfd = bg_flush_arg.cfd_;
   // intentional infrequent copy for each flush
@@ -2775,6 +2782,7 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
   std::vector<SuperVersionContext>& superversion_contexts =
       job_context->superversion_contexts;
   autovector<ColumnFamilyData*> column_families_not_to_flush;
+  // 默认情况下，这里只会取出一个 cfd
   while (!flush_queue_.empty()) {
     // This cfd is already referenced
     // 除了开启 atomic_flush功能下，flush_req里的column_famliy_data才存在多个的情况
@@ -2783,9 +2791,12 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
     superversion_contexts.clear();
     superversion_contexts.reserve(flush_req.size());
 
+    // 一般 flush_req 只有 一个 elem（atomic_flush才会有多个）
     for (const auto& iter : flush_req) {
       ColumnFamilyData* cfd = iter.first;
       if (immutable_db_options_.experimental_mempurge_threshold > 0.0) {
+        // immutable_db_options_.experimental_mempurge_threshold = 0 是默认配置
+        // 默认配置不会走这里，先忽略
         // If imm() contains silent memtables,
         // requesting a flush will mark the imm_needed as true.
         cfd->imm()->FlushRequested();
@@ -2804,6 +2815,7 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
     }
   }
 
+  // bg_flush_args 在默认配置下，长度是 1
   if (!bg_flush_args.empty()) {
     auto bg_job_limits = GetBGJobLimits();
     for (const auto& arg : bg_flush_args) {
@@ -2818,6 +2830,7 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
           bg_job_limits.max_compactions, bg_flush_scheduled_,
           bg_compaction_scheduled_);
     }
+    // 将数据持久化，主要是把 imm 刷到 l0 层
     status = FlushMemTablesToOutputFiles(bg_flush_args, made_progress,
                                          job_context, log_buffer, thread_pri);
     TEST_SYNC_POINT("DBImpl::BackgroundFlush:BeforeFlush");
@@ -3051,6 +3064,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
                                     LogBuffer* log_buffer,
                                     PrepickedCompaction* prepicked_compaction,
                                     Env::Priority thread_pri) {
+  // 从这个DBImpl::MaybeScheduleFlushOrCompaction()进来的 prepicked_compaction 是 nullptr
   ManualCompactionState* manual_compaction =
       prepicked_compaction == nullptr
           ? nullptr
@@ -3074,6 +3088,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
   CompactionJobStats compaction_job_stats;
   Status status;
   if (!error_handler_.IsBGWorkStopped()) {
+    // 没有发生错误
     if (shutting_down_.load(std::memory_order_acquire)) {
       status = Status::ShutdownInProgress();
     } else if (is_manual &&
@@ -3081,6 +3096,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       status = Status::Incomplete(Status::SubCode::kManualCompactionPaused);
     }
   } else {
+    // 发生错误了
     status = error_handler_.GetBGError();
     // If we get here, it means a hard error happened after this compaction
     // was scheduled by MaybeScheduleFlushOrCompaction(), but before it got
@@ -3116,6 +3132,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
   // InternalKey* manual_end = &manual_end_storage;
   bool sfm_reserved_compact_space = false;
   if (is_manual) {
+    // 先不看 手动 compaction
     ManualCompactionState* m = manual_compaction;
     assert(m->in_progress);
     if (!c) {
@@ -3154,6 +3171,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       }
     }
   } else if (!is_prepicked && !compaction_queue_.empty()) {
+    // compaction queue 不为空
     if (HasExclusiveManualCompaction()) {
       // Can't compact right now, but try again later
       TEST_SYNC_POINT("DBImpl::BackgroundCompaction()::Conflict");

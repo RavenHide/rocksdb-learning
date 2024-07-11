@@ -888,6 +888,7 @@ class TableFactory : public Customizable {
   // It is the caller's responsibility to keep the file open and close the file
   // after closing the table builder. compression_type is the compression type
   // to use in this table.
+  // 默认配置是 BlockBasedTableFactory
   virtual TableBuilder* NewTableBuilder(
       const TableBuilderOptions& table_builder_options,
       WritableFileWriter* file) const = 0;

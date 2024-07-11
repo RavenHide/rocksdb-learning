@@ -2716,6 +2716,10 @@ void VersionStorageInfo::ComputeCompactionScore(
   for (int level = 0; level <= MaxInputLevel(); level++) {
     double score;
     if (level == 0) {
+      // L0层的score 会选择以下两个中最大的一个来作为score
+      // (1) 当前的数据大小 / 期望该层最大能承受的数据大小
+      // (2) l0层sst数量 / 期望最大的l0层sst数量
+
       // We treat level-0 specially by bounding the number of files
       // instead of number of bytes for two reasons:
       //
@@ -2797,6 +2801,7 @@ void VersionStorageInfo::ComputeCompactionScore(
       }
     } else {
       // Compute the ratio of current size to size limit.
+      // 非L0层，score = 当前的数据大小 / 期望该层最大能承受的数据大小
       uint64_t level_bytes_no_compacting = 0;
       for (auto f : files_[level]) {
         if (!f->being_compacted) {
@@ -3421,6 +3426,7 @@ void VersionStorageInfo::GetOverlappingInputs(
     return;
   }
 
+  // 对于 level0 来说，需要把与 begin 和 end 存在交集或包含关系的sst给包括进来
   if (next_smallest) {
     // next_smallest key only makes sense for non-level 0, where files are
     // non-overlapping
@@ -3440,7 +3446,6 @@ void VersionStorageInfo::GetOverlappingInputs(
   for (size_t i = 0; i < level_files_brief_[level].num_files; i++) {
     index.emplace_back(i);
   }
-
   while (!index.empty()) {
     bool found_overlapping_file = false;
     auto iter = index.begin();
@@ -3467,6 +3472,7 @@ void VersionStorageInfo::GetOverlappingInputs(
         // the related file is overlap, erase to avoid checking again.
         iter = index.erase(iter);
         if (expand_range) {
+          // 如果存在 重叠部分，重新更新 user_begin 和 user_end，让整个范围能囊括 当前文件
           if (begin != nullptr &&
               user_cmp->CompareWithoutTimestamp(file_start, user_begin) < 0) {
             user_begin = file_start;
@@ -3542,6 +3548,7 @@ void VersionStorageInfo::GetOverlappingInputsRangeBinarySearch(
       return sstableKeyCompare(user_cmp, file_key, *k) < 0;
     };
 
+    // 二分查找不大于begin的元素的idx
     start_index = static_cast<int>(
         std::lower_bound(files,
                          files + (hint_index == -1 ? num_files : hint_index),
@@ -4246,6 +4253,7 @@ Status VersionSet::ProcessManifestWrites(
   } else {
     auto it = manifest_writers_.cbegin();
     size_t group_start = std::numeric_limits<size_t>::max();
+    //  开始遍历 manifest_writer 列表
     while (it != manifest_writers_.cend()) {
       if ((*it)->edit_list.front()->IsColumnFamilyManipulation()) {
         // no group commits for column family add or drop
@@ -4262,6 +4270,7 @@ Status VersionSet::ProcessManifestWrites(
         // to write the version edits' of dropped CF to the MANIFEST. If we
         // don't update, then Recover can report corrupted atomic group because
         // the `remaining_entries_` do not match.
+        // 不是 atomic的写模式，不需要关注这个
         if (!batch_edits.empty()) {
           if (batch_edits.back()->is_in_atomic_group_ &&
               batch_edits.back()->remaining_entries_ > 0) {
@@ -4290,6 +4299,7 @@ Status VersionSet::ProcessManifestWrites(
       // TODO(yanqin) maybe consider unordered_map
       Version* version = nullptr;
       VersionBuilder* builder = nullptr;
+      // 这个for 循环的目的是防止在 versions 和 builder_guards 中出现重复的 cf_id 的version 和 builder
       for (int i = 0; i != static_cast<int>(versions.size()); ++i) {
         uint32_t cf_id = last_writer->cfd->GetID();
         if (versions[i]->cfd()->GetID() == cf_id) {
@@ -4308,8 +4318,11 @@ Status VersionSet::ProcessManifestWrites(
           version = new Version(last_writer->cfd, this, file_options_,
                                 last_writer->mutable_cf_options, io_tracer_,
                                 current_version_number_++);
+          // 在这里才会push 元素进入 versions里面，意味着每个 writer
+          // 最多只会添加一个version 进入到 versions 里面
           versions.push_back(version);
           mutable_cf_options_ptrs.push_back(&last_writer->mutable_cf_options);
+          // builder_guards 也是 跟versions 有同样的限制
           builder_guards.emplace_back(
               new BaseReferencedVersionBuilder(last_writer->cfd));
           builder = builder_guards.back()->version_builder();
@@ -4341,6 +4354,7 @@ Status VersionSet::ProcessManifestWrites(
         batch_edits.push_back(e);
       }
     }
+    // 所有的 writes已经处理完成，把versions 写入 builder. 并释放 version
     for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
       assert(!builder_guards.empty() &&
              builder_guards.size() == versions.size());
@@ -4778,6 +4792,7 @@ Status VersionSet::LogAndApply(
     InstrumentedMutex* mu, FSDirectory* db_directory, bool new_descriptor_log,
     const ColumnFamilyOptions* new_cf_options,
     const std::vector<std::function<void(const Status&)>>& manifest_wcbs) {
+
   mu->AssertHeld();
   int num_edits = 0;
   for (const auto& elist : edit_lists) {
@@ -4820,6 +4835,9 @@ Status VersionSet::LogAndApply(
   while (!first_writer.done && &first_writer != manifest_writers_.front()) {
     first_writer.cv.Wait();
   }
+  // 这里是 一人执行，其余等待的模式。
+  // 首个 first_writer 才会进入下面的执行逻辑，即leader。其余的member 这里里等待 leader 将
+  // member的任务执行完后，直接返回
   if (first_writer.done) {
     // All non-CF-manipulation operations can be grouped together and committed
     // to MANIFEST. They should all have finished. The status code is stored in
@@ -6069,7 +6087,7 @@ ColumnFamilyData* VersionSet::CreateColumnFamily(
   constexpr bool update_stats = false;
 
   v->PrepareAppend(*new_cfd->GetLatestMutableCFOptions(), update_stats);
-
+  // 把cfd 的 version 设置当前这个 new version
   AppendVersion(new_cfd, v);
   // GetLatestMutableCFOptions() is safe here without mutex since the
   // cfd is not available to client

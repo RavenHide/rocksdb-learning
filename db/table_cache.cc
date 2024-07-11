@@ -196,6 +196,7 @@ Status TableCache::FindTable(
     if (no_io) {
       return Status::Incomplete("Table not found in table_cache, no_io is set");
     }
+    // 缓存没有，就从DB里面拿
     MutexLock load_lock(loader_mutex_.get(key));
     // We check the cache again under loading mutex
     *handle = cache_->Lookup(key);
@@ -215,6 +216,7 @@ Status TableCache::FindTable(
       // We do not cache error results so that if the error is transient,
       // or somebody repairs the file, we recover automatically.
     } else {
+      // 更新缓存
       s = cache_->Insert(key, table_reader.get(), 1, &DeleteEntry<TableReader>,
                          handle);
       if (s.ok()) {

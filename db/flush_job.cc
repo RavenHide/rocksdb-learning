@@ -192,6 +192,7 @@ void FlushJob::PickMemTable() {
   // entries mems are (implicitly) sorted in ascending order by their created
   // time. We will use the first memtable's `edit` to keep the meta info for
   // this flush.
+  // mems 是有的序，按照memTable的ID升序（memTable ID越小，说明memtable创建得越早）
   MemTable* m = mems_[0];
   edit_ = m->GetEdits();
   edit_->SetPrevLogNumber(0);
@@ -243,6 +244,7 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker, FileMetaData* file_meta,
   if ((db_options_.experimental_mempurge_threshold > 0.0) &&
       (cfd_->GetFlushReason() == FlushReason::kWriteBufferFull) &&
       (!mems_.empty()) && MemPurgeDecider()) {
+    // MemPurgeDecider() 默认配置的情况下是不执行 MemPurge()
     mempurge_s = MemPurge();
     if (!mempurge_s.ok()) {
       // Mempurge is typically aborted when the output
@@ -816,12 +818,14 @@ Status FlushJob::WriteLevel0Table() {
     Env::IOPriority io_priority = GetRateLimiterPriorityForWrite();
     db_mutex_->Unlock();
     if (log_buffer_) {
+      // 用来打印日志的，不需要特别关注
       log_buffer_->FlushBufferToLog();
     }
     // memtables and range_del_iters store internal iterators over each data
     // memtable and its associated range deletion memtable, respectively, at
     // corresponding indexes.
     std::vector<InternalIterator*> memtables;
+    // 不执行 RangeDel ，这里就不会有数据的
     std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
         range_del_iters;
     ReadOptions ro;
@@ -837,6 +841,7 @@ Status FlushJob::WriteLevel0Table() {
     TEST_SYNC_POINT_CALLBACK("FlushJob::WriteLevel0Table:num_memtables",
                              &mems_size);
     assert(job_context_);
+    // 获取 flush job 对应memtable 的遍历迭代器
     for (MemTable* m : mems_) {
       ROCKS_LOG_INFO(
           db_options_.info_log,
@@ -921,6 +926,7 @@ Status FlushJob::WriteLevel0Table() {
           meta_.fd.GetNumber());
       const SequenceNumber job_snapshot_seq =
           job_context_->GetJobSnapshotSequence();
+      // 构建 SSTable
       s = BuildTable(
           dbname_, versions_, db_options_, tboptions, file_options_,
           cfd_->table_cache(), iter.get(), std::move(range_del_iters), &meta_,

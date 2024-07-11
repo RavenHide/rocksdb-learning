@@ -459,6 +459,7 @@ void SuperVersion::Cleanup() {
   imm->Unref(&to_delete);
   MemTable* m = mem->Unref();
   if (m != nullptr) {
+    // memtable 没有被引用，需要进行删除
     auto* memory_usage = current->cfd()->imm()->current_memory_usage();
     assert(*memory_usage >= m->ApproximateMemoryUsage());
     *memory_usage -= m->ApproximateMemoryUsage();

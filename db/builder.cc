@@ -50,7 +50,9 @@ TableBuilder* NewTableBuilder(const TableBuilderOptions& tboptions,
   assert((tboptions.column_family_id ==
           TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
          tboptions.column_family_name.empty());
-  return tboptions.ioptions.table_factory->NewTableBuilder(tboptions, file);
+
+    // 默认初始化的是 BlockBasedTableBuilder 类
+    return tboptions.ioptions.table_factory->NewTableBuilder(tboptions, file);
 }
 
 Status BuildTable(
@@ -72,12 +74,14 @@ Status BuildTable(
     const std::string* full_history_ts_low,
     BlobFileCompletionCallback* blob_callback, uint64_t* num_input_entries,
     uint64_t* memtable_payload_bytes, uint64_t* memtable_garbage_bytes) {
+
   assert((tboptions.column_family_id ==
           TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
          tboptions.column_family_name.empty());
   auto& mutable_cf_options = tboptions.moptions;
   auto& ioptions = tboptions.ioptions;
   // Reports the IOStats for flush for every following bytes.
+  // 1048576 bytes = 1MB
   const size_t kReportFlushIOStatsEvery = 1048576;
   OutputValidator output_validator(
       tboptions.internal_comparator,
@@ -119,6 +123,7 @@ Status BuildTable(
   bool table_file_created = false;
   if (iter->Valid() || !range_del_agg->IsEmpty()) {
     std::unique_ptr<CompactionFilter> compaction_filter;
+    // ioptions.compaction_filter_factory 默认是空，可暂时忽略这段逻辑
     if (ioptions.compaction_filter_factory != nullptr &&
         ioptions.compaction_filter_factory->ShouldFilterTableFileCreation(
             tboptions.reason)) {
@@ -138,6 +143,7 @@ Status BuildTable(
       }
     }
 
+    // 其实里面存放的是一个文件句柄，以及fileSystem实现类
     TableBuilder* builder;
     std::unique_ptr<WritableFileWriter> file_writer;
     {
@@ -171,6 +177,7 @@ Status BuildTable(
           ioptions.file_checksum_gen_factory.get(),
           tmp_set.Contains(FileType::kTableFile), false));
 
+      // 默认初始化的是 BlockBasedTableBuilder 类
       builder = NewTableBuilder(tboptions, file_writer.get());
     }
 
@@ -207,6 +214,7 @@ Status BuildTable(
         /*shutting_down=*/nullptr, db_options.info_log, full_history_ts_low);
 
     c_iter.SeekToFirst();
+    // 将k-v数据加入到 builder 中
     for (; c_iter.Valid(); c_iter.Next()) {
       const Slice& key = c_iter.key();
       const Slice& value = c_iter.value();
@@ -239,6 +247,7 @@ Status BuildTable(
     }
 
     if (s.ok()) {
+      // 范围删除，先忽略
       auto range_del_it = range_del_agg->NewIterator();
       for (range_del_it->SeekToFirst(); range_del_it->Valid();
            range_del_it->Next()) {
@@ -260,6 +269,7 @@ Status BuildTable(
     if (!s.ok() || empty) {
       builder->Abandon();
     } else {
+      // 在这里，sst的表数据和meta数据的构建已经完成，并落盘了
       s = builder->Finish();
     }
     if (io_status->ok()) {

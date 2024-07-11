@@ -2303,6 +2303,8 @@ class DBImpl : public DB {
   //  the write_thread_ without using mutex
   //  - it follows that the items with getting_synced=true can be safely read
   //  from the same thread that has set getting_synced=true
+  // 每次New一个新的WAL文件时，一旦是使用新的log_file, 就会push一个新的 LogWriterNumber 到 logs
+  // 并且在 push 之前，会把 logs_ 中的最新的一个 log_file给刷盘
   std::deque<LogWriterNumber> logs_;
   // Signaled when getting_synced becomes false for some of the logs_.
   InstrumentedCondVar log_sync_cv_;

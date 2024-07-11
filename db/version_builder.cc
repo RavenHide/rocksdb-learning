@@ -362,7 +362,7 @@ class VersionBuilder::Rep {
       auto pair = std::make_pair(&lhs, &rhs);
       TEST_SYNC_POINT_CALLBACK(sync_point, &pair);
 #endif
-
+      // 检查前后两个邻近的 level_file
       const Status s = checker(lhs, rhs);
       if (!s.ok()) {
         return s;
@@ -435,11 +435,12 @@ class VersionBuilder::Rep {
       assert(icmp);
 
       for (int level = 1; level < num_levels_; ++level) {
+        // 保证 lhs的范围 < rhs的范围，并且不出现交集
         auto checker = [this, level, icmp](const FileMetaData* lhs,
                                            const FileMetaData* rhs) {
           assert(lhs);
           assert(rhs);
-
+          // 这里保证 lhs.smallest < rhs.smallest
           if (!level_nonzero_cmp_(lhs, rhs)) {
             std::ostringstream oss;
             oss << 'L' << level << " files are not sorted properly: files #"
@@ -812,6 +813,7 @@ class VersionBuilder::Rep {
   // Apply all of the edits in *edit to the current state.
   Status Apply(const VersionEdit* edit) {
     {
+      // 检查 base_vstorage_ 中的各个 level的文件信息的边界是否合法
       const Status s = CheckConsistency(base_vstorage_);
       if (!s.ok()) {
         return s;
@@ -1246,6 +1248,7 @@ class VersionBuilder::Rep {
       }
     });
 
+    // 并行加载 handlers
     std::vector<port::Thread> threads;
     for (int i = 1; i < max_threads; i++) {
       threads.emplace_back(load_handlers_func);

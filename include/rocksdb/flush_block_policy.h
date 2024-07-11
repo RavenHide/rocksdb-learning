@@ -27,6 +27,7 @@ class FlushBlockPolicy {
  public:
   // Keep track of the key/value sequences and return the boolean value to
   // determine if table builder should flush current data block.
+  // 默认是策略是 FlushBlockBySizePolicy
   virtual bool Update(const Slice& key, const Slice& value) = 0;
 
   virtual ~FlushBlockPolicy() {}

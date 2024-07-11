@@ -263,6 +263,7 @@ bool CompactionPicker::ExpandInputsToCleanCut(const std::string& /*cf_name*/,
   size_t old_size;
   do {
     old_size = inputs->size();
+    // 获取 inputs 的最大最小key
     GetRange(*inputs, &smallest, &largest);
     inputs->clear();
     vstorage->GetOverlappingInputs(level, &smallest, &largest, &inputs->files,

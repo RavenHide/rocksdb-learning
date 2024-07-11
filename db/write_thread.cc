@@ -45,6 +45,7 @@ uint8_t WriteThread::BlockingAwaitState(Writer* w, uint8_t goal_mask) {
       w->state.compare_exchange_strong(state, STATE_LOCKED_WAITING)) {
     // we have permission (and an obligation) to use StateMutex
     std::unique_lock<std::mutex> guard(w->StateMutex());
+    // 每次状态更新时，StateCV()都会notifyOne
     w->StateCV().wait(guard, [w] {
       return w->state.load(std::memory_order_relaxed) != STATE_LOCKED_WAITING;
     });

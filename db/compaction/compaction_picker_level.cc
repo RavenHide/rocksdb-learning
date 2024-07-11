@@ -173,6 +173,7 @@ void LevelCompactionBuilder::SetupInitialFiles() {
     start_level_ = vstorage_->CompactionScoreLevel(i);
     assert(i == 0 || start_level_score_ <= vstorage_->CompactionScore(i - 1));
     if (start_level_score_ >= 1) {
+      // start_level_score_ >= 1 表示数据量已经超过预期了
       if (skipped_l0_to_base && start_level_ == vstorage_->base_level()) {
         // If L0->base_level compaction is pending, don't schedule further
         // compaction from base level. Otherwise L0->base_level compaction
@@ -217,6 +218,7 @@ void LevelCompactionBuilder::SetupInitialFiles() {
     }
   }
   if (!start_level_inputs_.empty()) {
+    // 找到了可以执行compaction的files，直接结束
     return;
   }
 
@@ -453,16 +455,23 @@ bool LevelCompactionBuilder::PickFileToCompact() {
 
     start_level_inputs_.files.push_back(f);
     start_level_inputs_.level = start_level_;
+    // level=0时，compaction_picker_->ExpandInputsToCleanCut(..) = true
+    // 这段if的意思是： 满足以下任意条件，不执行 start_level_inputs_.files的compaction
+    // (1 start_level_inputs_ 中有执行compaction的sst
+    // (2 start_level_inputs_ 与 output_level_ 上正在执行compaction的sst的范围存在交集
     if (!compaction_picker_->ExpandInputsToCleanCut(cf_name_, vstorage_,
                                                     &start_level_inputs_) ||
         compaction_picker_->FilesRangeOverlapWithCompaction(
             {start_level_inputs_}, output_level_)) {
+      // compaction_picker_->FilesRangeOverlapWithCompaction 判断 inputs 是否与
+      // 某个level的正在执行compaction存在重合
+      // 重合指的是： 存在包含和交集的关系
       // A locked (pending compaction) input-level file was pulled in due to
       // user-key overlap.
       start_level_inputs_.clear();
       continue;
     }
-
+    // 到这里可以保证 start_level_inputs 没有重叠
     // Now that input level is fully expanded, we check whether any output files
     // are locked due to pending compaction.
     //

@@ -326,6 +326,7 @@ struct BlockBasedTableBuilder::Rep {
   BlockHandle pending_handle;  // Handle to add to index block
 
   std::string compressed_output;
+  // 默认是策略是 FlushBlockBySizePolicy
   std::unique_ptr<FlushBlockPolicy> flush_block_policy;
 
   std::vector<std::unique_ptr<IntTblPropCollector>> table_properties_collectors;
@@ -441,9 +442,11 @@ struct BlockBasedTableBuilder::Rep {
                 table_options, data_block)),
         status_ok(true),
         io_status_ok(true) {
+    // tao.target_file_size 在 FlushJob的WriteLevel0Table 是0
     if (tbo.target_file_size == 0) {
       buffer_limit = compression_opts.max_dict_buffer_bytes;
     } else if (compression_opts.max_dict_buffer_bytes == 0) {
+      // compression_opts.max_dict_buffer_bytes == 0
       buffer_limit = tbo.target_file_size;
     } else {
       buffer_limit = std::min(tbo.target_file_size,
@@ -925,13 +928,14 @@ void BlockBasedTableBuilder::Add(const Slice& key, const Slice& value) {
       assert(r->internal_comparator.Compare(key, Slice(r->last_key)) > 0);
     }
 #endif  // !NDEBUG
-
+    // 默认策略超过 4K 就会要 flush, 即 should
     auto should_flush = r->flush_block_policy->Update(key, value);
     if (should_flush) {
       assert(!r->data_block.empty());
       r->first_key_in_next_block = &key;
       Flush();
       if (r->state == Rep::State::kBuffered) {
+        // r->buffer_limit 在 WriteLevel0 的时候是为 0
         bool exceeds_buffer_limit =
             (r->buffer_limit != 0 && r->data_begin_offset > r->buffer_limit);
         bool exceeds_global_block_cache_limit = false;
@@ -948,6 +952,7 @@ void BlockBasedTableBuilder::Add(const Slice& key, const Slice& value) {
         }
 
         if (exceeds_buffer_limit || exceeds_global_block_cache_limit) {
+          // 超过了限制，或者cache没法扩容了，就对数据进行压缩
           EnterUnbuffered();
         }
       }
@@ -976,6 +981,7 @@ void BlockBasedTableBuilder::Add(const Slice& key, const Slice& value) {
       if (r->IsParallelCompressionEnabled()) {
         r->pc_rep->curr_block_keys->PushBack(key);
       } else {
+        // 是设置 bloom-filter，参考https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter
         if (r->filter_builder != nullptr) {
           size_t ts_sz =
               r->internal_comparator.user_comparator()->timestamp_size();
@@ -1027,6 +1033,7 @@ void BlockBasedTableBuilder::Flush() {
   assert(rep_->state != Rep::State::kClosed);
   if (!ok()) return;
   if (r->data_block.empty()) return;
+  // r->IsParallelCompressionEnabled() 默认不开启, 先忽略
   if (r->IsParallelCompressionEnabled() &&
       r->state == Rep::State::kUnbuffered) {
     r->data_block.Finish();
@@ -1062,7 +1069,7 @@ void BlockBasedTableBuilder::WriteBlock(const Slice& raw_block_contents,
                                         BlockType block_type) {
   Rep* r = rep_;
   assert(r->state == Rep::State::kUnbuffered);
-  Slice block_contents;
+  Slice block_contents; // 压缩之后的数据
   CompressionType type;
   Status compress_status;
   bool is_data_block = block_type == BlockType::kData;
@@ -1604,6 +1611,9 @@ void BlockBasedTableBuilder::WriteIndexBlock(
     rep_->SetStatus(index_builder_status);
   }
   if (ok()) {
+    // 对于 hash index来说，这里的 meta_block 是存储 kHashIndexPrefixesBlock 和
+    // kHashIndexPrefixesMetadataBlock 的数据
+    //
     for (const auto& item : index_blocks.meta_blocks) {
       BlockHandle block_handle;
       WriteBlock(item.second, &block_handle, BlockType::kIndex);
@@ -1614,6 +1624,7 @@ void BlockBasedTableBuilder::WriteIndexBlock(
     }
   }
   if (ok()) {
+    // 从这里才是把主要的索引数据写入sst
     if (rep_->table_options.enable_index_compression) {
       WriteBlock(index_blocks.index_block_contents, index_block_handle,
                  BlockType::kIndex);

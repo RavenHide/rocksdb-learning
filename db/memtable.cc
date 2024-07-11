@@ -445,7 +445,7 @@ InternalIterator* MemTable::NewIterator(const ReadOptions& read_options,
 
 FragmentedRangeTombstoneIterator* MemTable::NewRangeTombstoneIterator(
     const ReadOptions& read_options, SequenceNumber read_seq) {
-  if (read_options.ignore_range_deletions ||
+  if (read_options.ignore_range_deletions/* 默认是 false*/ ||
       is_range_del_table_empty_.load(std::memory_order_relaxed)) {
     return nullptr;
   }

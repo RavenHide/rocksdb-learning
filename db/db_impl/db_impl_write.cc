@@ -290,6 +290,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   // 写线程加入一个 Write 作业
   // todo 如果不是 并行写 状态，那执行 Writer 的逻辑在哪里触发
   write_thread_.JoinBatchGroup(&w);
+  // 并行模式下BatchWrite的成员可以直接并行写入，不需要由 leader去 按序执行
   if (w.state == WriteThread::STATE_PARALLEL_MEMTABLE_WRITER) {
     // we are a non-leader in a parallel group
 
@@ -2087,6 +2088,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
     assert(log_recycle_files_.front() == recycle_log_number);
     log_recycle_files_.pop_front();
   }
+  // 每次创建新的 log_file时候，就会把logs里面最新的文件给刷盘
   if (s.ok() && creating_new_log) {
     log_write_mutex_.Lock();
     assert(new_log != nullptr);
@@ -2189,8 +2191,10 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
       // advance the log number. no need to persist this in the manifest
       if (cf->IsEmpty()) {
         if (creating_new_log) {
+          // 新生成的 logfile_number_ 给 所有空的 cf 使用
           cf->SetLogNumber(logfile_number_);
         }
+        // 更新 cf 的 lastSeq
         cf->mem()->SetCreationSeq(versions_->LastSequence());
       }
     }
@@ -2202,6 +2206,7 @@ Status DBImpl::SwitchMemtable(ColumnFamilyData* cfd, WriteContext* context) {
   cfd->imm()->Add(cfd->mem(), &context->memtables_to_free_);
   new_mem->Ref();
   cfd->SetMemtable(new_mem);
+  // 这里的 superversion_context 已经是新版了，在上面会执行一个 NewSuperVersion()
   InstallSuperVersionAndScheduleWork(cfd, &context->superversion_context,
                                      mutable_cf_options);
 

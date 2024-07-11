@@ -461,12 +461,13 @@ void CompactionIterator::NextFromInput() {
       has_outputted_key_ = false;
 
       last_key_seq_zeroed_ = false;
-
+      // KeyCommitted 的代码逻辑较多，这里先略过不看
       current_key_committed_ = KeyCommitted(ikey_.sequence);
 
       // Apply the compaction filter to the first committed version of the user
       // key.
       if (current_key_committed_ &&
+          // InvokeFilterIfNeeded 这里的逻辑对于正常写入不需要太关注，先忽略
           !InvokeFilterIfNeeded(&need_skip, &skip_until)) {
         break;
       }
@@ -820,7 +821,7 @@ void CompactionIterator::NextFromInput() {
                  cmp_with_history_ts_low_ < 0)) &&
                bottommost_level_) {
       // Handle the case where we have a delete key at the bottom most level
-      // We can skip outputting the key iff there are no subsequent puts for this
+      // We can skip outputting the key if there are no subsequent puts for this
       // key
       assert(!compaction_ || compaction_->KeyNotExistsBeyondOutputLevel(
                                  ikey_.user_key, &level_ptrs_));
